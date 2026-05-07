@@ -1,0 +1,62 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+.pnpm-store/
+*.log
+npm-debug.log*
+.npm
+.pnp.*
+dist/
+build/
+.next/
+.cache/
+.turbo/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+lcov.info
+
+# Build outputs
+*.tsbuildinfo
+
+# Misc
+.tmp/
+*.iml
+*.pid
+*.seed
+*.pid.lock
+
+# Local secrets / tokens that should never be committed
+secrets.yaml
+*.pem
+*.key
+!**/testdata/**/*.pem
+!**/testdata/**/*.key
+
+# Internal planning, scratchpads, and tool caches — never published.
+# Public docs live in `documentation/`.
+docs/
