@@ -1,0 +1,38 @@
+[package]
+name        = "zagrosi-core"
+version     = "0.1.0"
+description = "Foundation library for the Zagrosi platform: error types, configuration loader, and observability skeleton."
+keywords    = ["zagrosi", "observability", "tracing", "config"]
+categories  = ["development-tools"]
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+authors.workspace      = true
+readme.workspace       = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde                       = { workspace = true }
+thiserror                   = { workspace = true }
+tracing                     = { workspace = true }
+tracing-subscriber          = { workspace = true }
+tracing-opentelemetry       = { workspace = true }
+opentelemetry               = { workspace = true }
+opentelemetry_sdk           = { workspace = true }
+opentelemetry-otlp          = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+figment                     = { workspace = true }
+tokio                       = { workspace = true }
+tokio-util                  = { workspace = true }
+axum                        = { workspace = true }
+
+[dev-dependencies]
+proptest          = { workspace = true }
+tempfile          = { workspace = true }
+serial_test       = { workspace = true }
+static_assertions = { workspace = true }
+figment           = { workspace = true, features = ["test"] }

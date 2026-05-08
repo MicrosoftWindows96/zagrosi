@@ -60,3 +60,6 @@ secrets.yaml
 # Internal planning, scratchpads, and tool caches — never published.
 # Public docs live in `documentation/`.
 docs/
+
+# Auto-generated per-project Claude config
+CLAUDE.md

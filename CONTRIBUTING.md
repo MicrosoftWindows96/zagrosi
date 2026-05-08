@@ -2,7 +2,7 @@
 
 Thank you for contributing to Zagrosi. This guide covers the workflow and standards for all contributions.
 
-> **Note (pre-alpha):** Zagrosi is currently a solo project in early design. Most code-level contribution paths below are aspirational — they describe the standard contributors will be held to once the foundation phase ships. Until then, the most useful contributions are issues, discussions, and design feedback.
+> **Note (pre-alpha):** Zagrosi is currently a solo project in early design. Most code-level contribution paths below are aspirational; they describe the standard contributors will be held to once the foundation phase ships. Until then, the most useful contributions are issues, discussions, and design feedback.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ This appends a `Signed-off-by:` trailer asserting that you have the right to con
 
 ## Main Branch is Protected
 
-The `main` branch is permanently protected. Direct pushes are blocked. All changes — including documentation, dependency bumps, and one-line fixes — must land via pull request from a feature branch.
+The `main` branch is permanently protected. Direct pushes are blocked. All changes (including documentation, dependency bumps, and one-line fixes) must land via pull request from a feature branch.
 
 Protection rules enforced on `main`:
 
@@ -35,7 +35,7 @@ Protection rules enforced on `main`:
 - Force-push and deletion blocked
 - Administrators are not exempt
 
-If you find yourself wanting to push directly to `main`, the answer is always "open a PR" — even for typo fixes.
+If you find yourself wanting to push directly to `main`, the answer is always "open a PR", even for typo fixes.
 
 ## Branch Naming
 
@@ -115,12 +115,12 @@ Reviewers should evaluate PRs against these categories:
 - No secrets or credentials in code or fixtures
 - User input is validated at boundaries (`serde` + custom validators on the Rust side, Zod schemas on the web side)
 - SQL injection, XSS, and CSRF protections maintained
-- Postgres Row-Level Security policies cover any new tables before they ship — never disable RLS to "fix" a query
+- Postgres Row-Level Security policies cover any new tables before they ship; never disable RLS to "fix" a query
 - MCP tools that mutate state require an authenticated session and respect the same RBAC as the REST endpoint they wrap
 - AuthZ checks happen at the service layer, not the gateway
 
 ### Performance
-- No N+1 queries in `sqlx` calls — prefer joins or batched `WHERE id = ANY($1)` patterns
+- No N+1 queries in `sqlx` calls; prefer joins or batched `WHERE id = ANY($1)` patterns
 - Large datasets are paginated (cursor-based by default, not offset)
 - Hot paths use prepared queries; one-shot queries use `query!` macros for compile-time checking
 - Client bundles are not unnecessarily increased; new dependencies justified in the PR description
@@ -128,7 +128,7 @@ Reviewers should evaluate PRs against these categories:
 ### Testing
 - New features have tests
 - Edge cases are covered
-- Tests are deterministic — no real time, no flaky timing dependencies; use `tokio::time::pause()` for async timers
+- Tests are deterministic; no real time, no flaky timing dependencies. Use `tokio::time::pause()` for async timers
 - Database tests use the per-test transaction-rollback fixture, not a shared dirty database
 
 ### Readability
@@ -187,19 +187,19 @@ All UI changes must meet **WCAG 2.1 Level AA** compliance:
 
 ### Rust
 - `cargo fmt` is enforced on CI; no exceptions
-- `cargo clippy --all-targets --all-features -- -D warnings` must pass — fix the warning, do not allow it
+- `cargo clippy --all-targets --all-features -- -D warnings` must pass; fix the warning, do not allow it
 - No `unwrap()` or `expect()` outside tests and proven-infallible call sites; use `?` and typed errors (`thiserror` per crate, `anyhow` only at binary boundaries)
 - No `unsafe` blocks without an accompanying `// SAFETY:` comment justifying every invariant
 - Prefer `tracing` over `log` for instrumentation; structured fields, not formatted strings
 
 ### TypeScript
-- **TypeScript strict mode** is enabled — follow it
-- **ESLint** runs on CI — fix all warnings before pushing
-- No `any` types — use proper type definitions or `unknown` with narrowing
-- No `// @ts-ignore` or `// @ts-expect-error` — fix the underlying type issue
-- No `eslint-disable` comments — fix the lint issue instead
+- **TypeScript strict mode** is enabled; follow it
+- **ESLint** runs on CI; fix all warnings before pushing
+- No `any` types; use proper type definitions or `unknown` with narrowing
+- No `// @ts-ignore` or `// @ts-expect-error`; fix the underlying type issue
+- No `eslint-disable` comments; fix the lint issue instead
 
 ### Database
-- All schema changes go through `sqlx migrate add` — never edit a committed migration
+- All schema changes go through `sqlx migrate add`; never edit a committed migration
 - Every new table ships with its RLS policies in the same migration
 - Index choices are justified in the migration's leading comment
