@@ -1,0 +1,6 @@
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+Sidecar SPDX header for branch-protection.json. The JSON itself is data
+consumed by the GitHub Rulesets API (gh api PUT /repos/.../rulesets/<id>
+--input branch-protection.json), which rejects unknown top-level keys;
+this sidecar follows the REUSE specification for licensing data files.
