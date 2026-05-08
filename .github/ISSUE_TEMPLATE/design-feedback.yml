@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Design feedback
+description: Provide feedback on a design proposal or ADR before implementation.
+title: "[Design]: "
+labels: ["design", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to share design feedback before implementation begins.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: The bounded context this design concerns.
+      options:
+        - identity
+        - workspaces
+        - tasks
+        - agile
+        - docs
+        - chat
+        - incidents
+        - oncall
+        - postmortems
+        - search
+        - notifications
+        - scheduler
+        - gateway
+        - web
+        - mcp
+        - helm
+        - compose
+        - ci
+        - deps
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Summary of the design question or proposal.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to relevant ADRs, prior issues, related PRs.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: Your specific feedback, concerns, or alternative approaches.
+    validations:
+      required: true
