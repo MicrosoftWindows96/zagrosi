@@ -99,7 +99,7 @@ Allowed scopes: `identity`, `workspaces`, `tasks`, `agile`, `docs`, `chat`, `inc
 4. Push your branch and open a PR using the template
 5. Request review from at least one maintainer (until the team grows, this means a self-review walkthrough recorded in the PR description)
 6. Address review feedback
-7. Merge using **merge commits** (not squash) to preserve individual commit history and DCO sign-offs
+7. Merge using **rebase merge** (not squash) to preserve individual commit history and DCO sign-offs. The `main` branch enforces `required_linear_history`, so merge commits are not permitted; rebase merge keeps every commit (with its `Signed-off-by:` trailer) on a linear history.
 
 ## Code Review Checklist
 
