@@ -67,7 +67,7 @@ Every surface as MCP tools, resources, and prompts. Declare incidents from Claud
 </tr>
 </table>
 
-All four share users, permissions, search, comments, audit log, and integrations. **First-class Slack and Microsoft Teams bridges** ship in-box: slash commands, auto-created incident channels, threaded action items, on-call paging, and notification routing — both directions. Self-hosted by default. AGPLv3 so it stays that way.
+All four share users, permissions, search, comments, audit log, and integrations. **First-class Slack and Microsoft Teams bridges** ship in-box: slash commands, auto-created incident channels, threaded action items, on-call paging, and notification routing, both directions. Self-hosted by default. AGPLv3 so it stays that way.
 
 ---
 
@@ -75,13 +75,13 @@ All four share users, permissions, search, comments, audit log, and integrations
 
 | Layer | Choice |
 |-------|--------|
-| Backend | **Rust** — axum, tokio, sqlx |
-| Frontend | **React + TypeScript** — Vite, TanStack Router/Query, Tailwind |
-| Database | **PostgreSQL 16** — row-level security for multi-tenancy |
-| Event bus | **NATS JetStream** — realtime, event sourcing, durable streams |
-| Cache | **Valkey** — BSD-licensed Redis fork, OSI-approved (Redis Inc. relicensed to non-OSS in 2024) |
-| Search | **Tantivy** — embedded, no Elasticsearch dependency |
-| MCP server | **[rmcp](https://crates.io/crates/rmcp)** v1.5+ — stdio + Streamable HTTP, MCP spec 2025-11-25 |
+| Backend | **Rust**: axum, tokio, sqlx |
+| Frontend | **React + TypeScript**: Vite, TanStack Router/Query, Tailwind |
+| Database | **PostgreSQL 16**: row-level security for multi-tenancy |
+| Event bus | **NATS JetStream**: realtime, event sourcing, durable streams |
+| Cache | **Valkey**: BSD-licensed Redis fork, OSI-approved (Redis Inc. relicensed to non-OSS in 2024) |
+| Search | **Tantivy**: embedded, no Elasticsearch dependency |
+| MCP server | **[rmcp](https://crates.io/crates/rmcp)** v1.5+: stdio + Streamable HTTP, MCP spec 2025-11-25 |
 | Auth | Built-in email/password **+** OIDC / SAML SSO |
 | Deploy | Docker Compose (single-node) **+** Helm chart (Kubernetes) |
 | License | **AGPLv3** |
@@ -92,46 +92,44 @@ All four share users, permissions, search, comments, audit log, and integrations
 
 ```
 ┌──────────────────────┐  ┌──────────────────────────────────────────┐
-│    React Web App     │  │  AI editors: Claude Code / Desktop /     │
-│                      │  │  Codex CLI / Cursor / Zed / Continue.dev │
+│    React Web App     │  │  AI editors: Claude Code, Codex CLI,     │
+│                      │  │  Cursor, Zed, Claude Desktop             │
 └──────────┬───────────┘  └──────────────────────┬───────────────────┘
            │ HTTPS + WS                          │ MCP (stdio / HTTP)
-┌──────────▼─────────────┐         ┌─────────────▼──────────────┐
-│  API Gateway (axum)    │◄───────►│  zagrosi-mcp  (rmcp)       │
-│  REST + WS ↔ NATS      │         │  tools / resources /       │
-│                        │         │  prompts                   │
-└─┬───┬───┬───┬───┬───┬──┘         └────────────────────────────┘
-  │   │   │   │   │   │
-┌─▼─┐┌▼─┐┌▼─┐┌▼─┐┌▼─┐┌▼────┐
-│ID ││Tk││Ag││Dc││Ch││Inc..│   ← bounded contexts, each a Rust crate
-└─┬─┘└┬─┘└┬─┘└┬─┘└┬─┘└┬────┘
-  │   │   │   │   │   │
-  └───┴───┴───┴───┴───┘
-            │
-   ┌────────┼────────┐
-   │        │        │
-┌──▼───┐ ┌──▼────┐ ┌──▼───┐
-│Postgres│ │NATS JS│ │Valkey│
-└────────┘ └───────┘ └──────┘
+           ▼                                     ▼
+┌──────────────────────────────┐    ┌─────────────────────────────┐
+│      API Gateway (axum)      │◄──►│     zagrosi-mcp (rmcp)      │
+│    REST + WS, NATS bridge    │    │ tools / resources / prompts │
+└──────────────┬───────────────┘    └─────────────────────────────┘
+               │
+               │  Bounded-context Rust crates routed via NATS JetStream:
+               │  identity, RBAC, work-item core, tasks, agile,
+               │  incidents, alerts, oncall, docs, chat, postmortems...
+               │
+    ┌──────────┼──────────┐
+    ▼          ▼          ▼
+┌────────┐ ┌────────┐ ┌────────┐
+│Postgres│ │NATS JS │ │ Valkey │
+└────────┘ └────────┘ └────────┘
 ```
 
-Each bounded context is its own Rust crate inside a Cargo workspace. Cross-service calls go through NATS request/reply or shared Postgres tables — never direct HTTP. The MCP server is a thin translator from MCP primitives to api-gateway REST calls; same auth, same permission model, same audit log as the web UI.
+Each bounded context is its own Rust crate inside a Cargo workspace. Cross-service calls go through NATS request/reply or shared Postgres tables, never direct HTTP. The MCP server is a thin translator from MCP primitives to api-gateway REST calls; same auth, same permission model, same audit log as the web UI.
 
 ---
 
 ## Roadmap
 
-A solo build. Dates aspirational, not commitments. The product track and AI-Native track ship in parallel — every product phase lights up matching MCP capabilities.
+A solo build. Dates aspirational, not commitments. The product track and AI-Native track ship in parallel; every product phase lights up matching MCP capabilities.
 
 | Phase | Status | Product | AI-Native (MCP + plugins) | Target |
 |:-----:|:------:|---------|---------------------------|:------:|
 | **0** | 📋 Planned | Foundation: monorepo, CI, identity, RBAC, multi-tenant, Docker/Helm | `zagrosi-mcp` skeleton (rmcp, stdio + HTTP, auth handshake) | ~2 mo |
-| **1** | 📋 Planned | Tasks: work items, custom fields, list / board / calendar views | MCP v0.1 — `create_task`, `list_tasks`, `update_task`, `task://<id>` resource | ~5 mo |
-| **2** | 📋 Planned | Agile: sprints, epics, scrum / kanban boards, story points | MCP v0.2 — sprint / board tools + `sprint_planning` prompt | ~7 mo |
-| **3** | 🎯 **MVP** | Incidents: severity, on-call, escalation, runbooks | MCP v0.3 — `declare_incident`, `page_oncall`, `ack_incident`, `incident_kickoff` prompt | ~10 mo |
-| **4** | 📋 Planned | Docs: wiki with Yjs realtime collab | MCP v0.4 — doc resources, full-text search tool | ~12 mo |
-| **5** | 📋 Planned | Chat + notifications | — | ~14 mo |
-| **6** | 📋 Planned | Postmortems: timeline, action items → tasks, analytics | MCP v0.5 — timeline resource + `postmortem_template` prompt | ~16 mo |
+| **1** | 📋 Planned | Tasks: work items, custom fields, list / board / calendar views | MCP v0.1: `create_task`, `list_tasks`, `update_task`, `task://<id>` resource | ~5 mo |
+| **2** | 📋 Planned | Agile: sprints, epics, scrum / kanban boards, story points | MCP v0.2: sprint / board tools + `sprint_planning` prompt | ~7 mo |
+| **3** | 🎯 **MVP** | Incidents: severity, on-call, escalation, runbooks | MCP v0.3: `declare_incident`, `page_oncall`, `ack_incident`, `incident_kickoff` prompt | ~10 mo |
+| **4** | 📋 Planned | Docs: wiki with Yjs realtime collab | MCP v0.4: doc resources, full-text search tool | ~12 mo |
+| **5** | 📋 Planned | Chat + notifications | n/a | ~14 mo |
+| **6** | 📋 Planned | Postmortems: timeline, action items → tasks, analytics | MCP v0.5: timeline resource + `postmortem_template` prompt | ~16 mo |
 | **7** | ♾️ Ongoing | Integrations marketplace (WASM plugin runtime), mobile, polish | Cursor extension, Zed plugin, Codex skill marketplace listing | ongoing |
 
 Open issues for ideas, complaints, prior art.
@@ -142,15 +140,15 @@ Open issues for ideas, complaints, prior art.
 
 ### Self-host
 
-> 🚧 **TBC** — installation instructions will be published once **Phase 0** ships.
+> 🚧 **TBC**: installation instructions will be published once **Phase 0** ships.
 
 ### Use from your AI editor
 
-> 🚧 **TBC** — `zagrosi-mcp` distribution (Cargo, Docker, prebuilt binaries) and per-client config snippets (Claude Code, Claude Desktop, Codex CLI, Cursor, Zed, Continue.dev) will be published with **MCP v0.1 (Phase 1)**.
+> 🚧 **TBC**: `zagrosi-mcp` distribution (Cargo, Docker, prebuilt binaries) and per-client config snippets (Claude Code, Claude Desktop, Codex CLI, Cursor, Zed, Continue.dev) will be published with **MCP v0.1 (Phase 1)**.
 
 ### Use as a Claude Code plugin
 
-> 🚧 **TBC** — slash commands (`/zag-incident`, `/zag-sprint`, `/zag-task`, `/zag-postmortem`) and a guided skill on top of the MCP tools will be published alongside **MCP v0.3 (Phase 3)**.
+> 🚧 **TBC**: slash commands (`/zag-incident`, `/zag-sprint`, `/zag-task`, `/zag-postmortem`) and a guided skill on top of the MCP tools will be published alongside **MCP v0.3 (Phase 3)**.
 
 ---
 
@@ -172,8 +170,8 @@ Open issues for ideas, complaints, prior art.
 
 This is currently a solo project in early design. The fastest way to help right now:
 
-- ⭐ **Star the repo** — signals interest
-- 💬 **Open a Discussion** — share use cases, complaints about your current tools, or design feedback
+- ⭐ **Star the repo**: signals interest
+- 💬 **Open a Discussion**: share use cases, complaints about your current tools, or design feedback
 - 🐛 **File issues** on the design notes once they land
 
 Code contributions will open up after the foundation phase ships. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow: branch and commit conventions, code review checklist, testing requirements, and DCO sign-off.
