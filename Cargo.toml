@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members  = ["crates/zagrosi-core"]
+members  = ["crates/zagrosi-core", "apps/api-gateway"]
 
 [workspace.package]
 edition      = "2024"
