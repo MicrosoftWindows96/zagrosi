@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+apiVersion: v2
+name: zagrosi
+description: Self-hosted Zagrosi platform.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0"
+home: https://zagrosi.com
+sources:
+  - https://github.com/MicrosoftWindows96/zagrosi
+maintainers:
+  - name: Zagrosi Contributors
+    url: https://github.com/MicrosoftWindows96/zagrosi
+    email: oss@zagrosi.com
+keywords:
+  - zagrosi
+  - platform
+  - self-hosted
+icon: https://zagrosi.com/icon.png
+dependencies: []
