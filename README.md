@@ -77,7 +77,7 @@ All four share users, permissions, search, comments, audit log, and integrations
 |-------|--------|
 | Backend | **Rust**: axum, tokio, sqlx |
 | Frontend | **React + TypeScript**: Vite, TanStack Router/Query, Tailwind |
-| Database | **PostgreSQL 16**: row-level security for multi-tenancy |
+| Database | **PostgreSQL 18**: row-level security for multi-tenancy |
 | Event bus | **NATS JetStream**: realtime, event sourcing, durable streams |
 | Cache | **Valkey**: BSD-licensed Redis fork, OSI-approved (Redis Inc. relicensed to non-OSS in 2024) |
 | Search | **Tantivy**: embedded, no Elasticsearch dependency |
@@ -161,7 +161,7 @@ Open issues for ideas, complaints, prior art.
 | Unified data model | ✅ Tasks ↔ issues ↔ incidents linked at the DB | ❌ Three databases, three APIs, three webhooks |
 | Single permission model | ✅ One RBAC across all surfaces | ❌ Three separate RBAC systems |
 | MCP / AI-native | ✅ First-party MCP server | ❌ None ship MCP today |
-| Per-seat pricing | 🆓 Zero | 💰 ~$30 – $80 / user / month combined |
+| Per-seat pricing | 🆓 Zero | 💰 ~$30 to $80 / user / month combined |
 | Vendor lock-in | 🆓 Run anywhere | 🔒 Triple lock-in |
 
 ---
