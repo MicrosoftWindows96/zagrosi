@@ -24,7 +24,7 @@ export default {
       'ci',
       'deps',
     ]],
-    'scope-empty':          [2, 'never'],
+    'scope-empty':          [0, 'never'],
     'subject-case':         [2, 'never', ['pascal-case', 'upper-case']],
     'subject-full-stop':    [2, 'never', '.'],
     'header-max-length':    [2, 'always', 100],
