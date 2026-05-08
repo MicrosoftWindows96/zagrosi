@@ -1,0 +1,24 @@
+[package]
+name        = "api-gateway"
+version     = "0.1.0"
+description = "Zagrosi API gateway placeholder. The real gateway lands in a later split."
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+authors.workspace      = true
+readme.workspace       = true
+publish     = false
+
+[lints]
+workspace = true
+
+[dependencies]
+zagrosi-core = { path = "../../crates/zagrosi-core" }
+tokio        = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing      = { workspace = true }
+
+[[bin]]
+name = "zagrosi-api-gateway"
+path = "src/main.rs"

@@ -456,8 +456,8 @@ mod tests {
         // Reserve an ephemeral port, drop the listener so the port is free,
         // then ask `build_prometheus` to bind it. Verifies the success path
         // returns a handle and a running server task.
-        let probe = std::net::TcpListener::bind("127.0.0.1:0")
-            .expect("ephemeral bind probe must succeed");
+        let probe =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("ephemeral bind probe must succeed");
         let port = probe.local_addr().expect("local_addr must succeed").port();
         drop(probe);
 
@@ -468,9 +468,18 @@ mod tests {
             prometheus_bind: Some(format!("127.0.0.1:{port}")),
         };
         let server = build_prometheus(&cfg);
-        assert!(server.metrics_handle.is_some(), "handle must be present on success");
-        assert!(server.metrics_server.is_some(), "server task must be spawned");
-        assert!(server.shutdown_token.is_some(), "cancellation token must be present");
+        assert!(
+            server.metrics_handle.is_some(),
+            "handle must be present on success"
+        );
+        assert!(
+            server.metrics_server.is_some(),
+            "server task must be spawned"
+        );
+        assert!(
+            server.shutdown_token.is_some(),
+            "cancellation token must be present"
+        );
 
         // Trigger cooperative shutdown to clean up the spawned task.
         if let Some(token) = server.shutdown_token {
@@ -482,9 +491,12 @@ mod tests {
     async fn build_prometheus_returns_disabled_when_port_already_bound() {
         // Hold the port for the duration of the test so the bind inside
         // `build_prometheus` fails with EADDRINUSE.
-        let blocker = std::net::TcpListener::bind("127.0.0.1:0")
-            .expect("blocker bind must succeed");
-        let port = blocker.local_addr().expect("local_addr must succeed").port();
+        let blocker =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("blocker bind must succeed");
+        let port = blocker
+            .local_addr()
+            .expect("local_addr must succeed")
+            .port();
 
         let cfg = CoreConfig {
             service_name: "test".into(),
@@ -493,7 +505,10 @@ mod tests {
             prometheus_bind: Some(format!("127.0.0.1:{port}")),
         };
         let server = build_prometheus(&cfg);
-        assert!(server.metrics_handle.is_none(), "handle must be None on bind failure");
+        assert!(
+            server.metrics_handle.is_none(),
+            "handle must be None on bind failure"
+        );
         assert!(server.metrics_server.is_none(), "no task should be spawned");
         assert!(server.shutdown_token.is_none());
 
