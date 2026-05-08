@@ -15,7 +15,7 @@ publish     = false
 workspace = true
 
 [dependencies]
-zagrosi-core = { path = "../../crates/zagrosi-core" }
+zagrosi-core = { path = "../../crates/zagrosi-core", version = "0.1.0" }
 tokio        = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing      = { workspace = true }
 
