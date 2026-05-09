@@ -1,0 +1,5 @@
+# Sponsor button shown on the repository home page and repository
+# hover cards. The single approved channel today is GitHub Sponsors;
+# additional platforms (Open Collective, Ko-fi, custom URLs) can be
+# layered on later by appending their respective keys here.
+github: [MicrosoftWindows96]
