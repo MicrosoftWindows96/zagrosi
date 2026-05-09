@@ -23,6 +23,7 @@ export default {
       'compose',
       'ci',
       'deps',
+      'repo',
     ]],
     'scope-empty':          [0, 'never'],
     'subject-case':         [2, 'never', ['pascal-case', 'upper-case']],
