@@ -15,7 +15,7 @@
 //! - [`router`] returns the public surface only:
 //!   - `POST /v1/auth/sign-up`
 //!   - `POST /v1/auth/sign-in`
-//!   - `POST /v1/auth/sign-out`
+//!   - `POST /v1/auth/sign-out` (requires an attached `AuthContext`)
 //!   - `POST /v1/auth/password-reset/request`
 //!   - `POST /v1/auth/password-reset/confirm`
 //!   - `GET  /v1/auth/password-reset/landing`

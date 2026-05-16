@@ -73,6 +73,17 @@ pub enum IdentityError {
     #[error("database error: {0}")]
     Database(#[source] Box<sqlx::Error>),
 
+    /// HTTP response construction failed because a generated header
+    /// value contained bytes that cannot be represented in an HTTP
+    /// header. This is an internal invariant breach, never a caller
+    /// validation failure.
+    #[error("response header malformed: {reason}")]
+    ResponseHeaderMalformed {
+        /// Human-readable description of the malformed generated
+        /// header.
+        reason: String,
+    },
+
     /// Raw token string failed prefix / body validation. Domain-layer
     /// `domain::token_format::parse_raw` is the single chokepoint; this
     /// variant is returned rather than the gateway-facing
@@ -677,6 +688,7 @@ impl axum::response::IntoResponse for IdentityError {
             | Self::MalformedEnvelope(_)
             | Self::UnknownKeyId(_)
             | Self::Database(_)
+            | Self::ResponseHeaderMalformed { .. }
             | Self::Argon2ProfileTooSlow { .. }
             | Self::Argon2Internal(_)
             | Self::MalformedRateLimit { .. }

@@ -35,6 +35,18 @@ pub const CSRF_COOKIE_NAME: &str = "__Host-zagrosi_csrf";
 /// [`crate::http::csrf::csrf_middleware`].
 pub const CSRF_HEADER_NAME: &str = "x-zagrosi-csrf";
 
+/// Render a `Set-Cookie` value that clears the browser session cookie.
+#[must_use]
+pub fn build_clear_session_cookie() -> String {
+    format!("{SESSION_COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0")
+}
+
+/// Render a `Set-Cookie` value that clears the CSRF cookie.
+#[must_use]
+pub fn build_clear_csrf_cookie() -> String {
+    format!("{CSRF_COOKIE_NAME}=; Path=/; Secure; SameSite=Lax; Max-Age=0")
+}
+
 /// Issued cookie pair the auth handler attaches to its response.
 ///
 /// `session` carries the raw `sid_*` token; `csrf` carries the
@@ -145,5 +157,27 @@ mod tests {
         let attach = SessionAttachment::new(raw.clone(), "c".repeat(43));
         assert_eq!(attach.raw_session_token, raw);
         assert_eq!(attach.csrf_value, "c".repeat(43));
+    }
+
+    #[test]
+    fn clear_session_cookie_expires_host_cookie() {
+        let rendered = build_clear_session_cookie();
+        assert!(rendered.contains("__Host-zagrosi_sid="));
+        assert!(rendered.contains("Path=/"));
+        assert!(rendered.contains("Secure"));
+        assert!(rendered.contains("HttpOnly"));
+        assert!(rendered.contains("SameSite=Lax"));
+        assert!(rendered.contains("Max-Age=0"));
+    }
+
+    #[test]
+    fn clear_csrf_cookie_expires_host_cookie_without_httponly() {
+        let rendered = build_clear_csrf_cookie();
+        assert!(rendered.contains("__Host-zagrosi_csrf="));
+        assert!(rendered.contains("Path=/"));
+        assert!(rendered.contains("Secure"));
+        assert!(rendered.contains("SameSite=Lax"));
+        assert!(rendered.contains("Max-Age=0"));
+        assert!(!rendered.contains("HttpOnly"));
     }
 }
