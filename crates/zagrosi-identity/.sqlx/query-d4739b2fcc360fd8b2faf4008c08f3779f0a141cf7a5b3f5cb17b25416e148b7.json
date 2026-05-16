@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE sessions\n            SET org_id = $2,\n                version = version + 1,\n                last_seen_at = now()\n            WHERE id = $1\n              AND version = $3\n              AND revoked_at IS NULL\n              AND deleted_at IS NULL\n            RETURNING version\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d4739b2fcc360fd8b2faf4008c08f3779f0a141cf7a5b3f5cb17b25416e148b7"
+}

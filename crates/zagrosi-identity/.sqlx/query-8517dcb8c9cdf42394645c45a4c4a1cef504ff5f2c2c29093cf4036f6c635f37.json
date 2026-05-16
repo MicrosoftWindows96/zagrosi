@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE org_idps\n            SET config = $3,\n                config_version = $4,\n                updated_at = now()\n            WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL\n            RETURNING config_version\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "config_version",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8517dcb8c9cdf42394645c45a4c4a1cef504ff5f2c2c29093cf4036f6c635f37"
+}

@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Integration-test stack: dev compose plus Authentik, SimpleSAMLphp, and Mailpit.
+
+name: zagrosi-test
+
+services:
+  postgres:
+    environment:
+      POSTGRES_MULTIPLE_DATABASES: "zagrosi,authentik"
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.2.3
+    restart: "no"
+    command: server
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:?POSTGRES_USER must be set in .env}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY must be set in .env}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:?AUTHENTIK_BOOTSTRAP_PASSWORD must be set in .env}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?AUTHENTIK_BOOTSTRAP_TOKEN must be set in .env}
+      AUTHENTIK_BOOTSTRAP_EMAIL: smoke@zagrosi.test
+    volumes:
+      - ../../infra/authentik/bootstrap.yaml:/blueprints/zagrosi/bootstrap.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.2.3
+    restart: "no"
+    command: worker
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:?POSTGRES_USER must be set in .env}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY must be set in .env}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:?AUTHENTIK_BOOTSTRAP_TOKEN must be set in .env}
+    volumes:
+      - ../../infra/authentik/bootstrap.yaml:/blueprints/zagrosi/bootstrap.yaml:ro
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+
+  simplesamlphp:
+    image: kristophjunge/test-saml-idp:1.15
+    restart: "no"
+    environment:
+      SIMPLESAMLPHP_SP_ENTITY_ID: http://localhost:8080/v1/auth/saml/metadata
+      SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE: http://localhost:8080/v1/auth/saml/acs
+      SIMPLESAMLPHP_SP_SINGLE_LOGOUT_SERVICE: http://localhost:8080/v1/auth/saml/slo
+    volumes:
+      - ../../infra/simplesaml/config.php:/var/www/simplesamlphp/config/config.php:ro
+      - ../../infra/simplesaml/authsources.php:/var/www/simplesamlphp/config/authsources.php:ro
+      - ../../infra/simplesaml/saml20-idp-hosted.php:/var/www/simplesamlphp/metadata/saml20-idp-hosted.php:ro
+      - ../../infra/simplesaml/metadata:/var/www/simplesamlphp/metadata/zagrosi:ro
+    ports:
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@file_get_contents(\"http://localhost:8080/simplesaml/saml2/idp/metadata.php\") === false ? 1 : 0);'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    restart: "no"
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

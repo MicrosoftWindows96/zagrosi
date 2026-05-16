@@ -1,0 +1,50 @@
+name: rust / signin-bench
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  signin-bench:
+    name: signin-bench
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: "-D warnings"
+      ZAGROSI_ARGON2_M_COST: "8"
+      ZAGROSI_ARGON2_T_COST: "1"
+      ZAGROSI_ARGON2_P_COST: "1"
+      ZAGROSI_ARGON2_MAX_CONCURRENCY: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0
+      - name: Compile identity benches
+        run: cargo bench --no-run -p zagrosi-identity
+      - name: Install SAML system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxmlsec1-dev pkg-config
+      - name: Compile SAML bench
+        run: cargo bench --no-run -p zagrosi-identity --features saml --bench signin_saml_acs_bench
+      - name: Run Argon2 calibration bench
+        run: cargo bench -p zagrosi-identity --bench argon2_calibration
+      - name: Run password sign-in bench
+        run: cargo bench -p zagrosi-identity --bench signin_password_bench
+      - name: Run OIDC callback bench
+        run: cargo bench -p zagrosi-identity --bench signin_oidc_callback_bench
+      - name: Run SAML ACS bench
+        run: cargo bench -p zagrosi-identity --features saml --bench signin_saml_acs_bench
+      - name: Run session resolve bench
+        run: cargo bench -p zagrosi-identity --bench session_resolve_bench
+      - name: Run cold session resolve bench
+        run: cargo bench -p zagrosi-identity --bench session_resolve_bench_cold
+      - name: Gate session resolve throughput
+        run: scripts/check-bench-gate.sh session_resolve_bench 10000
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: signin-bench-results
+          path: target/criterion/**/*

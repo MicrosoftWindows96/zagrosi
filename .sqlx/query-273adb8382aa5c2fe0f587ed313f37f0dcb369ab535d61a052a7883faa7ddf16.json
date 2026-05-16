@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE groups\n            SET row_version = row_version + 1,\n                updated_at = now()\n            WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL\n            RETURNING row_version, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "row_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "273adb8382aa5c2fe0f587ed313f37f0dcb369ab535d61a052a7883faa7ddf16"
+}

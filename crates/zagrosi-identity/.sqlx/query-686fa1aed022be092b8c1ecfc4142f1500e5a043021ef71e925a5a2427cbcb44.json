@@ -1,0 +1,66 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, protocol, issuer_or_entity_id, subject_or_nameid,\n                   org_idp_id, user_id, created_at, last_login_at\n            FROM federated_identities\n            WHERE protocol = $1\n              AND issuer_or_entity_id = $2\n              AND subject_or_nameid = $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "issuer_or_entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject_or_nameid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "org_idp_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_login_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "686fa1aed022be092b8c1ecfc4142f1500e5a043021ef71e925a5a2427cbcb44"
+}

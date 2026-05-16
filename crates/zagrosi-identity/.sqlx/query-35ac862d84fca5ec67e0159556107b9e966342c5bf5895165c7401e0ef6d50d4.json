@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE oidc_pending_auth\n            SET used_at = $2\n            WHERE id = $1 AND used_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35ac862d84fca5ec67e0159556107b9e966342c5bf5895165c7401e0ef6d50d4"
+}

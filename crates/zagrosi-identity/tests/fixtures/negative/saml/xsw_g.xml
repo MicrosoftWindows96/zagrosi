@@ -1,0 +1,1 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="xsw-g"><Assertion ID="signed"><Subject>victim</Subject></Assertion><Assertion ID="signed"><Subject>attacker</Subject></Assertion></samlp:Response>

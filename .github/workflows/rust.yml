@@ -47,6 +47,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0
+      - name: Install SAML system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxmlsec1-dev pkg-config
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           shared-key: clippy
@@ -63,6 +65,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0
+      - name: Install SAML system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxmlsec1-dev pkg-config
       - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
         with:
           shared-key: test
@@ -115,3 +119,81 @@ jobs:
           cp .env.example .env
           chmod +x scripts/smoke-compose.sh
           bash scripts/smoke-compose.sh
+
+  sso-integration:
+    name: rust / sso-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: sso-integration
+      - name: Install SAML system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxmlsec1-dev pkg-config
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+          {
+            echo "POSTGRES_USER=zagrosi"
+            echo "POSTGRES_PASSWORD=smoke-test-password-not-secret"
+            echo "POSTGRES_DB=zagrosi"
+            echo "AUTHENTIK_SECRET_KEY=$(openssl rand -hex 32)"
+            echo "AUTHENTIK_BOOTSTRAP_PASSWORD=$(openssl rand -hex 16)"
+            echo "AUTHENTIK_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)"
+            echo "ZAGROSI_TEST_SCIM_BEARER=scim_$(openssl rand -hex 32)"
+            echo "ZAGROSI_TEST_USER_PASSWORD=$(openssl rand -hex 16)"
+            echo "RUN_INTEGRATION=1"
+          } >> .env
+      - name: Bring up test compose smoke
+        run: |
+          chmod +x scripts/smoke-sso.sh scripts/bootstrap-authentik.sh
+          bash scripts/smoke-sso.sh
+      - name: Bring up test compose for tests
+        run: |
+          set -a; source .env; set +a
+          docker compose -f deploy/docker/compose.yaml -f deploy/docker/compose.test.yaml up -d --wait
+          bash scripts/bootstrap-authentik.sh
+      - name: Run integration tests
+        env:
+          RUN_INTEGRATION: "1"
+          SQLX_OFFLINE: "true"
+          DATABASE_URL: postgres://zagrosi:smoke-test-password-not-secret@127.0.0.1:5432/zagrosi
+        run: cargo test -p zagrosi-identity --features saml --tests --no-fail-fast
+      - name: Tear down
+        if: always()
+        run: |
+          set -a
+          [ ! -f .env ] || source .env
+          set +a
+          docker compose -f deploy/docker/compose.yaml -f deploy/docker/compose.test.yaml down -v --remove-orphans
+
+  fuzz-smoke:
+    name: rust / fuzz-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          shared-key: fuzz-smoke
+      - name: Install SAML system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxmlsec1-dev pkg-config
+      - name: Install cargo-fuzz
+        run: RUSTFLAGS="" cargo +stable install cargo-fuzz --locked --version '^0.12'
+      - name: Build fuzz targets
+        working-directory: crates/zagrosi-identity
+        run: |
+          cargo +nightly fuzz build saml_assertion
+          cargo +nightly fuzz build scim_filter
+          cargo +nightly fuzz build oidc_id_token
+      - name: Smoke each target for 60s
+        working-directory: crates/zagrosi-identity
+        run: |
+          for target in saml_assertion scim_filter oidc_id_token; do
+            cargo +nightly fuzz run "$target" -- -max_total_time=60 -timeout=10
+          done

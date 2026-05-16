@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE org_idps SET deleted_at = now(), updated_at = now()\n           WHERE org_id = $1 AND deleted_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2bd595ea63327791c52f7980d0a7c86c974ca03de30a2388e3dcf9fc323c402"
+}

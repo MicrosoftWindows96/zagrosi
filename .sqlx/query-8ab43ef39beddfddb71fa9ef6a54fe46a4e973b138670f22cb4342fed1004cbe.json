@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE users\n            SET email_verified_at = $2,\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n              AND email_verified_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ab43ef39beddfddb71fa9ef6a54fe46a4e973b138670f22cb4342fed1004cbe"
+}

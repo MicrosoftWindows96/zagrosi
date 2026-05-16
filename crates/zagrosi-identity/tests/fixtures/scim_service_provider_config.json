@@ -1,0 +1,24 @@
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
+  "documentationUri": "https://zagrosi.com/documentation/identity/scim",
+  "patch": { "supported": true },
+  "bulk": { "supported": false, "maxOperations": 0, "maxPayloadSize": 0 },
+  "filter": { "supported": true, "maxResults": 200 },
+  "changePassword": { "supported": false },
+  "sort": { "supported": true },
+  "etag": { "supported": true },
+  "authenticationSchemes": [
+    {
+      "name": "OAuth Bearer Token",
+      "description": "Bearer scim_<43 base64url> minted via POST /v1/orgs/{slug}/scim-tokens.",
+      "specUri": "https://datatracker.ietf.org/doc/html/rfc6750",
+      "documentationUri": "https://zagrosi.com/documentation/identity/scim",
+      "type": "oauthbearertoken",
+      "primary": true
+    }
+  ],
+  "meta": {
+    "resourceType": "ServiceProviderConfig",
+    "location": "/scim/v2/ServiceProviderConfig"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_outbox (\n                id, org_id, to_address, from_address, subject,\n                body_text, body_html, template_key, locale,\n                idempotency_key, state, attempts, next_attempt_at\n            )\n            VALUES (\n                $1, $2, $3, $4, $5,\n                $6, $7, $8, 'en',\n                $9, 'queued', 0, now()\n            )\n            ON CONFLICT (org_id, idempotency_key) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b17055c6d997831b8d5dc45ba421136330a61c95cc60b6105ad2664adc82d80e"
+}

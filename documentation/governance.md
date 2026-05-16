@@ -16,7 +16,7 @@ The `main` branch is permanently protected. The protection model uses GitHub's m
 
 ### Required status checks
 
-Every pull request to the canonical repository's `main` branch must pass thirteen status checks before merge. All thirteen come from the project's own GitHub Actions workflows; the `cncf/dco2` GitHub App is supported as an additional layer when installed (its `DCO` context is not in the required-checks list, so the App is optional).
+Every pull request to the canonical repository's `main` branch must pass sixteen status checks before merge. All sixteen come from the project's own GitHub Actions workflows; the `cncf/dco2` GitHub App is supported as an additional layer when installed (its `DCO` context is not in the required-checks list, so the App is optional).
 
 - `dco / dco` (the project's pure-shell Signed-off-by trailer check; lives at `.github/workflows/dco.yml`)
 - `commitlint / lint`
@@ -27,6 +27,9 @@ Every pull request to the canonical repository's `main` branch must pass thirtee
 - `rust / cargo deny`
 - `rust / cargo sbom`
 - `rust / compose smoke`
+- `rust / sso-integration`
+- `rust / signin-bench`
+- `rust / fuzz-smoke`
 - `web / pnpm lint`
 - `web / pnpm typecheck`
 - `web / pnpm test`

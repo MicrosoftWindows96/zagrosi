@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, org_id, basic_role, joined_via,\n                   jit_provisioned_at, created_at, deleted_at\n            FROM user_org_memberships\n            WHERE user_id = $1 AND deleted_at IS NULL\n            ORDER BY created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "basic_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "joined_via",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "jit_provisioned_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f8633e7a109643ed5057053cb78d2267471f582f11f5296de10e6de0f4790081"
+}

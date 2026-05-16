@@ -54,11 +54,11 @@ impl CoreConfig {
     /// file. Environment values take precedence; the file fills gaps.
     ///
     /// Unknown fields in the file are tolerated. Malformed env values or
-    /// malformed TOML surface as [`ZagrosiError::Config`].
+    /// malformed TOML surface as [`crate::ZagrosiError::Config`].
     ///
     /// # Errors
     ///
-    /// Returns [`ZagrosiError::Config`] when environment values or file
+    /// Returns [`crate::ZagrosiError::Config`] when environment values or file
     /// contents fail to deserialise into [`CoreConfig`].
     pub fn load(opts: LoadOptions<'_>) -> Result<Self> {
         let mut figment = Figment::new();

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT user_id, org_idp_id\n                        FROM federated_identities\n                        WHERE protocol = $1\n                          AND issuer_or_entity_id = $2\n                          AND subject_or_nameid = $3\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_idp_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "65e816ec4da2a68c94415ef6c73dee5ce5b0f829a4a9980b0591cd679bbde6f9"
+}

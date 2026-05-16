@@ -1,0 +1,7 @@
+version: 1
+metadata:
+  name: Zagrosi test SSO seed
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+context: {}
+entries: []

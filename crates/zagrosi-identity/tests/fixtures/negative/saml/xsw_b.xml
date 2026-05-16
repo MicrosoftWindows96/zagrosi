@@ -1,0 +1,1 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="xsw-b"><Wrapper><Assertion ID="signed"/></Wrapper><Assertion ID="attacker"/></samlp:Response>

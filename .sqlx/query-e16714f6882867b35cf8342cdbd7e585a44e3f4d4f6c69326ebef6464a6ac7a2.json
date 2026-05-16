@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) AS \"count!\"\n            FROM users u\n            JOIN user_org_memberships m ON m.user_id = u.id\n            WHERE m.org_id = $1\n              AND u.deleted_at IS NULL\n              AND m.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e16714f6882867b35cf8342cdbd7e585a44e3f4d4f6c69326ebef6464a6ac7a2"
+}

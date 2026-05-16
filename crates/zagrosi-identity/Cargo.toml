@@ -1,0 +1,145 @@
+[package]
+name        = "zagrosi-identity"
+version     = "0.1.0"
+description = "Identity, SSO, and SCIM foundation crate for the Zagrosi platform: users, organisations, sessions, password auth, OIDC, SAML 2.0, and SCIM 2.0."
+keywords    = ["zagrosi", "identity", "sso", "oidc", "scim"]
+categories  = ["authentication"]
+publish     = false
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+authors.workspace      = true
+readme.workspace       = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Pull samael + libxmlsec1 + libxml2 + openssl C link. Reviewers MUST
+# verify the default build's binary symbol table contains no
+# `libssl` / `libcrypto` / `libxmlsec1` references after the saml
+# feature gate is added. The `tests/saml_*` integration tests are
+# gated on this feature; default `cargo test --workspace` does not
+# exercise them.
+saml = ["dep:samael", "dep:flate2", "dep:quick-xml", "dep:aws-lc-rs"]
+# Gates the `*_for_fuzz` re-exports consumed by the cargo-fuzz
+# harness in `fuzz/` (a separate workspace, see root `Cargo.toml`
+# `[workspace] exclude`). Adds no dependencies and ships no code on
+# the default build; `cargo +nightly fuzz build` turns it on so the
+# libFuzzer targets can reach the otherwise network-coupled verify
+# entry points (e.g. `oidc::verify_id_token_for_fuzz`). The
+# equivalent SAML / SCIM entry points (`saml::acs::fuzz_entry`,
+# `http::scim::filter::parse`) are already `pub` and need no gate.
+fuzzing = []
+
+[dependencies]
+zagrosi-core     = { path = "../zagrosi-core" }
+serde            = { workspace = true }
+thiserror        = { workspace = true }
+figment          = { workspace = true }
+base64           = { workspace = true }
+sqlx             = { workspace = true }
+uuid             = { workspace = true }
+chrono           = { workspace = true }
+serde_json       = { workspace = true }
+aes-gcm          = { workspace = true }
+zeroize          = { workspace = true }
+secrecy          = { workspace = true }
+rand_core        = { workspace = true }
+sha2             = { workspace = true }
+subtle           = { workspace = true }
+# Password-auth.
+argon2           = { workspace = true }
+password-hash    = { workspace = true }
+# `sha1` use is restricted to the HIBP k-anonymity legacy-API path
+# (src/password/breach.rs); all other hashing uses sha2 above.
+sha1             = { workspace = true }
+hex              = { workspace = true }
+fluent-templates = { workspace = true }
+validator        = { workspace = true }
+num_cpus         = { workspace = true }
+reqwest          = { workspace = true }
+url              = { workspace = true }
+http             = { workspace = true }
+mime             = { workspace = true }
+async-trait      = { workspace = true }
+tracing          = { workspace = true }
+tokio            = { workspace = true }
+axum             = { workspace = true }
+# Async client for the Valkey-backed rate limiter + lockout.
+fred             = { workspace = true }
+# Session resolver: in-process LRU + reverse-lookup + cookie builder + NATS pub/sub.
+moka             = { workspace = true }
+dashmap          = { workspace = true }
+cookie           = { workspace = true }
+async-nats       = { workspace = true }
+futures          = { workspace = true }
+arc-swap         = { workspace = true }
+# Email-outbox worker: SMTP transport + cooperative shutdown token.
+lettre           = { workspace = true }
+tokio-util       = { workspace = true }
+# Multi-IdP routing (section-13). DNSSEC-validating resolver,
+# Mozilla Public Suffix List, and IDN punycoding. See workspace
+# `Cargo.toml` for the pin rationale + feature-flag selection.
+hickory-resolver = { workspace = true }
+psl              = { workspace = true }
+idna             = { workspace = true }
+# `metrics` for the discover-decision counter
+# (`zagrosi_identity_discover_total{decision=...}`); the workspace
+# already pins the v0.24 facade plus the prometheus exporter at the
+# observability layer.
+metrics          = { workspace = true }
+# OIDC Authorization Code + PKCE flow (see `src/oidc/`).
+openidconnect    = { workspace = true }
+# SAML 2.0 SP — feature-gated to keep default builds C-link free.
+# See module docs in `src/saml/mod.rs` and the `saml` feature
+# definition above.
+samael           = { workspace = true, optional = true }
+flate2           = { workspace = true, optional = true }
+quick-xml        = { workspace = true, optional = true }
+aws-lc-rs        = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest               = { workspace = true }
+tempfile               = { workspace = true }
+serial_test            = { workspace = true }
+static_assertions      = { workspace = true }
+serde_json             = { workspace = true }
+figment                = { workspace = true, features = ["test"] }
+tokio                  = { workspace = true }
+testcontainers-modules = { workspace = true }
+wiremock               = { workspace = true }
+tracing-test           = { workspace = true }
+trybuild               = { workspace = true }
+criterion              = { workspace = true, features = ["async_tokio", "html_reports"] }
+tower                  = { version = "0.5", features = ["util"] }
+http-body-util         = "0.1"
+async-trait            = { workspace = true }
+
+[[bench]]
+name = "argon2_calibration"
+harness = false
+
+[[bench]]
+name = "signin_password_bench"
+harness = false
+
+[[bench]]
+name = "signin_oidc_callback_bench"
+harness = false
+
+[[bench]]
+name = "signin_saml_acs_bench"
+harness = false
+required-features = ["saml"]
+
+[[bench]]
+name = "session_resolve_bench"
+harness = false
+
+[[bench]]
+name = "session_resolve_bench_cold"
+harness = false

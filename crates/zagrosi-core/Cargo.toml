@@ -4,6 +4,7 @@ version     = "0.1.0"
 description = "Foundation library for the Zagrosi platform: error types, configuration loader, and observability skeleton."
 keywords    = ["zagrosi", "observability", "tracing", "config"]
 categories  = ["development-tools"]
+publish     = false
 edition.workspace      = true
 rust-version.workspace = true
 license.workspace      = true
@@ -17,6 +18,7 @@ workspace = true
 
 [dependencies]
 serde                       = { workspace = true }
+serde_json                  = { workspace = true }
 thiserror                   = { workspace = true }
 tracing                     = { workspace = true }
 tracing-subscriber          = { workspace = true }
@@ -29,6 +31,9 @@ figment                     = { workspace = true }
 tokio                       = { workspace = true }
 tokio-util                  = { workspace = true }
 axum                        = { workspace = true }
+chrono                      = { workspace = true }
+uuid                        = { workspace = true }
+async-trait                 = { workspace = true }
 
 [dev-dependencies]
 proptest          = { workspace = true }

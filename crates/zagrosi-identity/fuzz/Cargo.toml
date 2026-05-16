@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# `cargo-fuzz` workspace member for the secrets shim. Lives outside the
+# root workspace (see `[workspace] exclude` in the root `Cargo.toml`)
+# because cargo-fuzz pins its own toolchain settings and requires nightly
+# Rust for the libFuzzer instrumentation.
+#
+# The integration-test compose layer wires the
+# `cargo +nightly fuzz run <target> -- -max_total_time=60` smoke into
+# the `rust / fuzz-smoke` CI job for every target below
+# (secrets_open, saml_assertion, scim_filter, oidc_id_token).
+#
+# `features = ["saml", "fuzzing"]` on the path dep below: `saml`
+# brings the SAML ACS parser into scope for `saml_assertion`;
+# `fuzzing` gates the `*_for_fuzz` re-exports that wrap
+# network-coupled verify paths (currently `oidc_id_token`). The SCIM
+# filter parser and SAML `acs::fuzz_entry` are already `pub` and need
+# no feature gate.
+
+[package]
+name           = "zagrosi-identity-fuzz"
+version        = "0.0.0"
+publish        = false
+edition        = "2024"
+rust-version   = "1.91"
+license        = "AGPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+
+[dependencies.zagrosi-identity]
+path = ".."
+features = ["saml", "fuzzing"]
+
+[[bin]]
+name = "secrets_open"
+path = "fuzz_targets/secrets_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "saml_assertion"
+path = "fuzz_targets/saml_assertion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scim_filter"
+path = "fuzz_targets/scim_filter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "oidc_id_token"
+path = "fuzz_targets/oidc_id_token.rs"
+test = false
+doc = false
+bench = false

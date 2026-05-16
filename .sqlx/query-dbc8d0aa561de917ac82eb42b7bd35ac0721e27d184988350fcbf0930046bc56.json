@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM saml_assertion_replay\n            WHERE not_on_or_after < $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dbc8d0aa561de917ac82eb42b7bd35ac0721e27d184988350fcbf0930046bc56"
+}

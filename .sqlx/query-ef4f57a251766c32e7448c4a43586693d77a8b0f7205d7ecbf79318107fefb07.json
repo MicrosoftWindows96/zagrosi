@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO saml_assertion_replay (\n                org_idp_id, assertion_id, not_on_or_after\n            )\n            VALUES ($1, $2, $3)\n            RETURNING org_idp_id, assertion_id, not_on_or_after, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_idp_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "assertion_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "not_on_or_after",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ef4f57a251766c32e7448c4a43586693d77a8b0f7205d7ecbf79318107fefb07"
+}

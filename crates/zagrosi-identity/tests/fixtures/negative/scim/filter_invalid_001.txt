@@ -1,0 +1,5 @@
+# Invalid SCIM filters used by tests and fuzz corpus seeding.
+userName eq "unterminated
+emails[type eq "work"
+(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((userName pr
+unknown[attr eq "x"]

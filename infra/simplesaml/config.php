@@ -1,0 +1,20 @@
+<?php
+$config = [
+    'baseurlpath' => 'http://localhost:8081/simplesaml/',
+    'certdir' => 'cert/',
+    'loggingdir' => 'log/',
+    'datadir' => 'data/',
+    'tempdir' => '/tmp/simplesaml',
+    'technicalcontact_name' => 'Zagrosi Test',
+    'technicalcontact_email' => 'smoke@zagrosi.test',
+    'secretsalt' => 'zagrosi-test-salt-not-secret',
+    'auth.adminpassword' => 'secret',
+    'admin.protectindexpage' => false,
+    'admin.protectmetadata' => false,
+    'trusted.url.domains' => ['localhost', '127.0.0.1'],
+    'enable.saml20-idp' => true,
+    'module.enable' => ['exampleauth' => true],
+    'debug' => false,
+    'showerrors' => true,
+    'errorreporting' => true,
+];
