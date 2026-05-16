@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT 1 AS hit\n            FROM federated_identities f\n            JOIN org_idps i ON i.id = f.org_idp_id\n            WHERE f.user_id = $1\n              AND i.org_id <> $2\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hit",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c5447abb1d0c41629a700bdeb3cf93218a00dc2d44840519a5fdc15339f08306"
+}

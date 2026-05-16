@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members  = ["crates/zagrosi-core", "apps/api-gateway"]
+members  = ["crates/zagrosi-core", "crates/zagrosi-identity", "apps/api-gateway"]
+exclude  = ["crates/zagrosi-identity/fuzz"]
 
 [workspace.package]
 edition      = "2024"
@@ -13,10 +14,14 @@ readme       = "README.md"
 
 [workspace.dependencies]
 # Core
-serde      = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror  = "2"
-anyhow     = "1"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+thiserror   = "2"
+anyhow      = "1"
+base64      = "0.22"
+chrono      = { version = "0.4", default-features = false, features = ["std", "serde", "clock"] }
+uuid        = { version = "1", features = ["serde", "v7"] }
+async-trait = "0.1"
 
 # Tracing + OpenTelemetry
 tracing                        = "0.1"
@@ -39,23 +44,138 @@ tokio      = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 axum       = "0.8"
 once_cell  = "1"
+# Stream + future combinators consumed by the session-event subscriber.
+futures    = "0.3"
 
 # Testing
-proptest          = "1"
-tempfile          = "3"
-serial_test       = "3"
-static_assertions = "1.1"
+proptest               = "1"
+tempfile               = "3"
+serial_test            = "3"
+static_assertions      = "1.1"
+testcontainers-modules = { version = "0.15", features = ["postgres", "valkey"] }
+
+# Cryptography (secrets shim + token-hashing chokepoint + constant-time compare)
+aes-gcm   = { version = "0.10", default-features = false, features = ["aes", "alloc", "getrandom", "zeroize"] }
+zeroize   = { version = "1", features = ["zeroize_derive"] }
+secrecy   = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2      = "0.10"
+subtle    = "2"
 
 # Reserved for later sections (pinned now to prevent version skew)
-sqlx            = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "uuid", "chrono", "json"] }
+sqlx            = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate", "uuid", "chrono", "json", "ipnetwork"] }
 async-nats      = "0.47"
 tantivy         = "0.22"
 rmcp            = "0.5"
 extism          = "1"
 argon2          = "0.5"
+password-hash   = "0.5"
 jsonwebtoken    = "10"
 criterion       = "0.5"
 axum-prometheus = "0.10"
+
+# OIDC client (Authorization Code + PKCE S256). Default features pull
+# `reqwest` async + rustls-tls so this lines up with the workspace
+# shared `reqwest` (rustls). `timing-resistant-secret-traits` enables
+# constant-time `PartialEq` on `ClientSecret` / `Nonce` / verifier
+# secret types via the crate's own sha256-based equality.
+openidconnect   = { version = "4", features = ["timing-resistant-secret-traits"] }
+
+# SAML 2.0 SP. samael's `xmlsec` feature pulls libxmlsec1 + libxml2
+# system C deps via bindgen. Activated only when the `saml` feature on
+# `zagrosi-identity` is enabled; default builds never link the C
+# stack. The git pin is the upstream 0.0.20 post-release fix for
+# xmlsec 1.3.x bindings, where `xmlSecBufferGetSize` may bind as `u32`
+# on Ubuntu runners. Later bumps must re-validate the XSW hardening
+# through the `tests/saml_negative_corpus.rs` corpus before merging.
+samael          = { git = "https://github.com/njaremko/samael.git", rev = "f879f1942ec1b34b6d3027ce7e4724ad95d15dfa", default-features = false, features = ["xmlsec"] }
+# RSA-2048 / P-256 SP signing-key generation (metadata.xml). aws-lc-rs
+# is the same crypto backend rustls + fred 10.x already select; the
+# workspace pin keeps a single FIPS-validatable provider rather than
+# letting `ring` slip in transitively.
+aws-lc-rs       = "1"
+# DEFLATE compression for HTTP-Redirect binding `SAMLRequest=` query.
+flate2          = "1"
+# XML render for SP `EntityDescriptor` metadata document. Same parser
+# crate samael uses internally; pinning at workspace level keeps a
+# single XML implementation in the SAML signing path.
+quick-xml       = "0.39"
+
+# Password-auth dependencies.
+# `sha1` use is restricted to the HIBP k-anonymity legacy-API path
+# (crates/zagrosi-identity/src/password/breach.rs); all other hashing
+# uses sha2/sha3 via the `sha2` workspace dep.
+sha1             = "0.10"
+hex              = "0.4"
+fluent-templates = { version = "0.13", default-features = false, features = ["walkdir"] }
+# Email-outbox worker SMTP transport. `default-features = false` keeps
+# the native-tls C stack out; `tokio1-rustls` selects the async rustls
+# path and `aws-lc-rs` pins the rustls crypto backend to the same
+# FIPS-validatable provider rustls + fred already select (NOT `ring`).
+# Verified against lettre 0.11.21 docs: the TLS feature is
+# `tokio1-rustls` (not `tokio1-rustls-tls`) and the backend feature is
+# `aws-lc-rs`.
+lettre           = { version = "0.11", default-features = false, features = ["tokio1-rustls", "aws-lc-rs", "webpki-roots", "smtp-transport", "pool", "builder", "hostname"] }
+validator        = "0.20"
+num_cpus         = "1.16"
+reqwest          = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+url              = { version = "2", features = ["serde"] }
+http             = "1"
+mime             = "0.3"
+
+# Password-auth dev-dependencies.
+wiremock         = "0.6"
+tracing-test     = "0.2"
+trybuild         = "1"
+
+# Async client for the Valkey-backed rate limiter + lockout.
+# `enable-rustls` selects rustls TLS with the default crypto backend
+# (aws-lc-rs in fred 10.x). `i-keys` enables INCR / GET / SET, `i-scripts`
+# enables EVAL / EVALSHA for atomic sliding-window scripts, `i-server`
+# exposes admin commands needed by integration tests, and `i-tracking`
+# is required by the design notes for client-side caching wiring.
+fred = { version = "10", default-features = false, features = ["enable-rustls", "i-keys", "i-scripts", "i-server", "i-tracking", "sha-1"] }
+
+# Session resolver dependencies.
+# - `moka` ships an async-native, sized-and-TTL bounded cache used by
+#   the gateway-facing introspection path.
+# - `dashmap` backs the auxiliary session-id reverse-lookup index so
+#   NATS-driven evictions land in O(1) without holding the moka cache
+#   lock.
+# - `cookie` is the same crate axum uses for `Set-Cookie` builders;
+#   pinning it at the workspace level keeps cookie-attribute defaults
+#   consistent across crates.
+moka      = { version = "0.12", features = ["future"] }
+dashmap   = "6"
+cookie    = { version = "0.18", features = ["percent-encode", "secure"] }
+# arc-swap backs the session cache's healthy <-> fail-closed TTL flip:
+# the underlying moka cache TTL is constructor-bound, so the resolver
+# replaces the cache atomically when the broker health probe transitions.
+arc-swap  = "1"
+
+# Multi-IdP routing dependencies (section-13).
+#
+# - `hickory-resolver` is the in-process DNSSEC-validating resolver
+#   used by the domain-ownership verification flow. The
+#   `dnssec-aws-lc-rs` feature wires the validating path through the
+#   workspace's chosen crypto backend (matches `aws-lc-rs` already
+#   pulled by rustls + fred 10.x) so we do not link a second
+#   provider transitively. `system-config` enables construction from
+#   `/etc/resolv.conf` for development; production code constructs
+#   from a fixed dual-resolver IP pair via `ResolverConfig::from_parts`.
+#   Default features are disabled so neither hickory's own TLS stack
+#   nor any non-tokio runtime sneaks in.
+# - `psl` ships the Mozilla Public Suffix List snapshot consumed by
+#   the public-domain blocklist. Exact-pinned so a `cargo update`
+#   cannot silently shift the bundled snapshot — the quarterly
+#   review cadence documented in `CHANGELOG.md` is meaningless
+#   without an exact-pin. The contributor bumping the version is
+#   responsible for the matching changelog entry.
+# - `idna` punycodes international domains so the routing-lookup key
+#   is normalised to ASCII before hitting the partial unique index.
+hickory-resolver = { version = "0.25", default-features = false, features = ["tokio", "dnssec-aws-lc-rs", "system-config"] }
+psl              = "=2.1.208"
+idna             = "1"
 
 [workspace.lints.rust]
 unsafe_code      = "forbid"

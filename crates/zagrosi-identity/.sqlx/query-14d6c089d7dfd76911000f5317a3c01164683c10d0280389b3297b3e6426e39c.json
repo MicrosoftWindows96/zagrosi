@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scim_tokens SET deleted_at = now()\n           WHERE org_id = $1 AND deleted_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14d6c089d7dfd76911000f5317a3c01164683c10d0280389b3297b3e6426e39c"
+}

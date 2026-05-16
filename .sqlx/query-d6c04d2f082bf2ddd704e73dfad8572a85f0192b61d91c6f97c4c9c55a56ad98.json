@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE oidc_refresh_tokens\n            SET used_at = $2\n            WHERE id = $1 AND used_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6c04d2f082bf2ddd704e73dfad8572a85f0192b61d91c6f97c4c9c55a56ad98"
+}

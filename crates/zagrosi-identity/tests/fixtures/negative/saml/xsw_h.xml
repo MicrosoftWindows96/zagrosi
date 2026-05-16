@@ -1,0 +1,1 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="xsw-h"><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Reference="#signed"/><Assertion ID="attacker"/></samlp:Response>

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE oidc_refresh_tokens\n            SET revoked_at = now()\n            WHERE session_id = $1 AND revoked_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "350c705e739a2d77d1bdba8e16a1b73984bdc885319d64886c0dec41af6ed3e7"
+}

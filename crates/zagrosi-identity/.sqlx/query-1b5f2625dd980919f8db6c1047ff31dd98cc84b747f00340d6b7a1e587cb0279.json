@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_org_memberships (\n                id, user_id, org_id, basic_role, joined_via,\n                jit_provisioned_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, user_id, org_id, basic_role, joined_via,\n                      jit_provisioned_at, created_at, deleted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "basic_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "joined_via",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "jit_provisioned_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "1b5f2625dd980919f8db6c1047ff31dd98cc84b747f00340d6b7a1e587cb0279"
+}

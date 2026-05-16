@@ -1,0 +1,1456 @@
+openapi: 3.1.0
+info:
+  title: Zagrosi Identity API
+  version: 0.1.0
+  summary: Public identity, SSO, SCIM, and token-management API.
+  description: >
+    This specification documents the browser auth, OIDC, SAML, SCIM,
+    session, personal access token, SCIM token, service token, and admin
+    unlock surfaces shipped by the identity foundation.
+  license:
+    name: AGPL-3.0-or-later
+    identifier: AGPL-3.0-or-later
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+servers:
+  - url: https://api.zagrosi.example
+    description: Production API gateway
+security: []
+tags:
+  - name: Auth
+    description: Browser account, session bootstrap, and recovery flows.
+  - name: Sessions
+    description: Browser session listing, switching, and revocation.
+  - name: Personal access tokens
+    description: User-managed `pat_` bearer tokens.
+  - name: OIDC
+    description: OpenID Connect login entry and callback surfaces.
+  - name: SAML
+    description: SAML SP-initiated login, ACS, and metadata surfaces.
+  - name: SCIM
+    description: RFC 7643 and RFC 7644 provisioning endpoints.
+  - name: Org SSO
+    description: Organization IdP domain claims and SCIM token management.
+  - name: Service tokens
+    description: Platform service-token management.
+  - name: Admin
+    description: Operator-only account recovery actions.
+paths:
+  /v1/auth/sign-up:
+    post:
+      tags: [Auth]
+      operationId: signUp
+      summary: Start email and password sign-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignUpRequest"
+      responses:
+        "201":
+          description: Accepted. The response is intentionally the same for first and duplicate requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/sign-in:
+    post:
+      tags: [Auth]
+      operationId: signIn
+      summary: Verify email and password and issue browser session cookies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+      responses:
+        "200":
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/sign-out:
+    post:
+      tags: [Auth]
+      operationId: signOut
+      summary: Revoke the current browser session.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "204":
+          description: Signed out.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "401":
+          $ref: "#/components/responses/Problem401"
+  /v1/auth/email-verifications/request:
+    post:
+      tags: [Auth]
+      operationId: requestEmailVerification
+      summary: Send a verification-email token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/email-verifications/confirm:
+    post:
+      tags: [Auth]
+      operationId: confirmEmailVerification
+      summary: Consume a verification-email token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenConfirmRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "409":
+          $ref: "#/components/responses/Problem409"
+  /v1/auth/password-reset/request:
+    post:
+      tags: [Auth]
+      operationId: requestPasswordReset
+      summary: Send a password-reset token. Unknown email addresses receive the same response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /v1/auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      operationId: confirmPasswordReset
+      summary: Consume a password-reset token and set a new password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "409":
+          $ref: "#/components/responses/Problem409"
+  /v1/auth/discover:
+    post:
+      tags: [Auth]
+      operationId: discoverIdentityRoute
+      summary: Resolve an email domain to password, OIDC, SAML, or picker routing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscoverRequest"
+      responses:
+        "200":
+          description: Routing decision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoverResponse"
+        "400":
+          $ref: "#/components/responses/Problem400"
+        "422":
+          $ref: "#/components/responses/Problem422"
+  /v1/sessions:
+    get:
+      tags: [Sessions]
+      operationId: listSessions
+      summary: List live sessions for the current user.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      responses:
+        "200":
+          description: Live sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Problem401"
+  /v1/sessions/me:
+    get:
+      tags: [Sessions]
+      operationId: getCurrentSession
+      summary: Inspect the current session.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      responses:
+        "200":
+          description: Current session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Problem401"
+    patch:
+      tags: [Sessions]
+      operationId: switchActiveOrg
+      summary: Switch the active organisation for the current session.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchOrgRequest"
+      responses:
+        "200":
+          description: Updated session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "409":
+          $ref: "#/components/responses/Problem409"
+    delete:
+      tags: [Sessions]
+      operationId: deleteCurrentSession
+      summary: Revoke the current session.
+      security:
+        - SessionCookie: []
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          $ref: "#/components/responses/Problem401"
+  /v1/sessions/{id}:
+    delete:
+      tags: [Sessions]
+      operationId: deleteSession
+      summary: Revoke one of the caller's sessions.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "404":
+          $ref: "#/components/responses/Problem404"
+  /v1/api-tokens:
+    get:
+      tags: [Personal access tokens]
+      operationId: listApiTokens
+      summary: List the caller's personal access tokens.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      responses:
+        "200":
+          description: Token list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens]
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiTokenView"
+        "403":
+          $ref: "#/components/responses/Problem403"
+    post:
+      tags: [Personal access tokens]
+      operationId: createApiToken
+      summary: Mint a personal access token. The raw `pat_` value is returned once.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiTokenRequest"
+      responses:
+        "201":
+          description: Token minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedApiToken"
+        "403":
+          $ref: "#/components/responses/Problem403"
+        "409":
+          $ref: "#/components/responses/Problem409"
+  /v1/api-tokens/{id}:
+    get:
+      tags: [Personal access tokens]
+      operationId: getApiToken
+      summary: Read personal access token metadata.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          description: Token metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiTokenView"
+        "404":
+          $ref: "#/components/responses/Problem404"
+    delete:
+      tags: [Personal access tokens]
+      operationId: deleteApiToken
+      summary: Revoke a personal access token.
+      security:
+        - SessionCookie: []
+        - BearerToken: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: Token revoked.
+        "404":
+          $ref: "#/components/responses/Problem404"
+  /v1/auth/oidc/{org_slug}/start:
+    get:
+      tags: [OIDC]
+      operationId: startOidc
+      summary: Start OIDC Authorization Code with PKCE S256.
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the provider authorize endpoint.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "400":
+          $ref: "#/components/responses/Problem400"
+  /v1/auth/oidc/{org_slug}/callback:
+    get:
+      tags: [OIDC]
+      operationId: oidcCallback
+      summary: Complete OIDC callback. Requires RFC 9207 `iss`.
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        "302":
+          description: Redirect after successful callback.
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "409":
+          $ref: "#/components/responses/Problem409"
+  /v1/auth/saml/{org_slug}/start:
+    get:
+      tags: [SAML]
+      operationId: startSaml
+      summary: Start SP-initiated SAML Web SSO.
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+      responses:
+        "302":
+          description: Redirect to the IdP.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+  /v1/auth/saml/{org_slug}/acs:
+    post:
+      tags: [SAML]
+      operationId: samlAcs
+      summary: Consume a SAMLResponse POST binding.
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/SamlAcsRequest"
+      responses:
+        "302":
+          description: Redirect after successful ACS.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "401":
+          $ref: "#/components/responses/Problem401"
+        "409":
+          $ref: "#/components/responses/Problem409"
+  /v1/auth/saml/{org_slug}/metadata.xml:
+    get:
+      tags: [SAML]
+      operationId: samlMetadata
+      summary: Return SAML SP metadata XML.
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+      responses:
+        "200":
+          description: SAML metadata.
+          content:
+            application/samlmetadata+xml:
+              schema:
+                type: string
+  /scim/v2/Users:
+    get:
+      tags: [SCIM]
+      operationId: scimListUsers
+      summary: List SCIM users with RFC 7644 filter, sort, and pagination.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/ScimFilter"
+        - $ref: "#/components/parameters/StartIndex"
+        - $ref: "#/components/parameters/Count"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimList"
+        "401":
+          $ref: "#/components/responses/ScimUnauthorized"
+    post:
+      tags: [SCIM]
+      operationId: scimCreateUser
+      summary: Create a SCIM user.
+      security:
+        - ScimBearer: []
+      requestBody:
+        $ref: "#/components/requestBodies/ScimUser"
+      responses:
+        "201":
+          $ref: "#/components/responses/ScimResource"
+        "409":
+          $ref: "#/components/responses/ScimError409"
+  /scim/v2/Users/{id}:
+    get:
+      tags: [SCIM]
+      operationId: scimGetUser
+      summary: Fetch a SCIM user.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+        "404":
+          $ref: "#/components/responses/ScimError404"
+    put:
+      tags: [SCIM]
+      operationId: scimPutUser
+      summary: Replace a SCIM user.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        $ref: "#/components/requestBodies/ScimUser"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+        "412":
+          $ref: "#/components/responses/ScimError412"
+    patch:
+      tags: [SCIM]
+      operationId: scimPatchUser
+      summary: Patch a SCIM user.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        $ref: "#/components/requestBodies/ScimPatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+        "412":
+          $ref: "#/components/responses/ScimError412"
+    delete:
+      tags: [SCIM]
+      operationId: scimDeleteUser
+      summary: Soft-delete a SCIM user.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: User soft-deleted.
+  /scim/v2/Groups:
+    get:
+      tags: [SCIM]
+      operationId: scimListGroups
+      summary: List SCIM groups.
+      security:
+        - ScimBearer: []
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimList"
+    post:
+      tags: [SCIM]
+      operationId: scimCreateGroup
+      summary: Create a SCIM group.
+      security:
+        - ScimBearer: []
+      requestBody:
+        $ref: "#/components/requestBodies/ScimGroup"
+      responses:
+        "201":
+          $ref: "#/components/responses/ScimResource"
+  /scim/v2/Groups/{id}:
+    get:
+      tags: [SCIM]
+      operationId: scimGetGroup
+      summary: Fetch a SCIM group.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+    put:
+      tags: [SCIM]
+      operationId: scimPutGroup
+      summary: Replace a SCIM group.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        $ref: "#/components/requestBodies/ScimGroup"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+    patch:
+      tags: [SCIM]
+      operationId: scimPatchGroup
+      summary: Patch a SCIM group.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        $ref: "#/components/requestBodies/ScimPatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+    delete:
+      tags: [SCIM]
+      operationId: scimDeleteGroup
+      summary: Delete a SCIM group.
+      security:
+        - ScimBearer: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: Group deleted.
+  /scim/v2/ServiceProviderConfig:
+    get:
+      tags: [SCIM]
+      operationId: scimServiceProviderConfig
+      summary: Return SCIM ServiceProviderConfig.
+      security:
+        - ScimBearer: []
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+  /scim/v2/ResourceTypes:
+    get:
+      tags: [SCIM]
+      operationId: scimResourceTypes
+      summary: Return SCIM resource type metadata.
+      security:
+        - ScimBearer: []
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+  /scim/v2/Schemas:
+    get:
+      tags: [SCIM]
+      operationId: scimSchemas
+      summary: Return SCIM schema metadata.
+      security:
+        - ScimBearer: []
+      responses:
+        "200":
+          $ref: "#/components/responses/ScimResource"
+  /v1/orgs/{org_slug}/idps/{org_idp_id}/domains:
+    post:
+      tags: [Org SSO]
+      operationId: createIdpDomain
+      summary: Create a domain claim challenge for an org IdP.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - $ref: "#/components/parameters/OrgIdpId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDomainRequest"
+      responses:
+        "201":
+          description: Domain challenge created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainChallenge"
+  /v1/orgs/{org_slug}/idps/{org_idp_id}/domains/{domain_id}/verify:
+    post:
+      tags: [Org SSO]
+      operationId: verifyIdpDomain
+      summary: Verify an IdP domain claim.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - $ref: "#/components/parameters/OrgIdpId"
+        - $ref: "#/components/parameters/DomainId"
+      responses:
+        "200":
+          description: Domain verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainChallenge"
+        "422":
+          $ref: "#/components/responses/Problem422"
+  /v1/orgs/{org_slug}/idps/{org_idp_id}/domains/{domain_id}:
+    delete:
+      tags: [Org SSO]
+      operationId: deleteIdpDomain
+      summary: Delete an IdP domain claim.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - $ref: "#/components/parameters/OrgIdpId"
+        - $ref: "#/components/parameters/DomainId"
+      responses:
+        "204":
+          description: Domain claim deleted.
+  /v1/orgs/{org_slug}/scim-tokens:
+    get:
+      tags: [Org SSO]
+      operationId: listScimTokens
+      summary: List org SCIM bearer tokens.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+      responses:
+        "200":
+          description: SCIM tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScimTokenView"
+    post:
+      tags: [Org SSO]
+      operationId: createScimToken
+      summary: Mint a SCIM bearer. The raw `scim_` value is returned once.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScimTokenRequest"
+      responses:
+        "201":
+          description: SCIM token minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedScimToken"
+  /v1/orgs/{org_slug}/scim-tokens/{id}:
+    get:
+      tags: [Org SSO]
+      operationId: getScimToken
+      summary: Fetch SCIM token metadata.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          description: SCIM token metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimTokenView"
+    delete:
+      tags: [Org SSO]
+      operationId: deleteScimToken
+      summary: Revoke a SCIM bearer token.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/OrgSlug"
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: SCIM token revoked.
+  /v1/service-tokens:
+    get:
+      tags: [Service tokens]
+      operationId: listServiceTokens
+      summary: List platform service tokens.
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Service token list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ServiceTokenView"
+    post:
+      tags: [Service tokens]
+      operationId: createServiceToken
+      summary: Mint a service token. The raw `svc_` value is returned once.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceTokenRequest"
+      responses:
+        "201":
+          description: Service token minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedServiceToken"
+  /v1/service-tokens/{id}:
+    get:
+      tags: [Service tokens]
+      operationId: getServiceToken
+      summary: Fetch service token metadata.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "200":
+          description: Service token metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceTokenView"
+    delete:
+      tags: [Service tokens]
+      operationId: deleteServiceToken
+      summary: Revoke a service token.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: Service token revoked.
+  /v1/admin/users/{id}/unlock:
+    post:
+      tags: [Admin]
+      operationId: unlockUser
+      summary: Clear per-account lockout state.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/UuidId"
+      responses:
+        "204":
+          description: User unlocked.
+        "403":
+          $ref: "#/components/responses/Problem403"
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-zagrosi_sid
+      description: Secure HttpOnly SameSite=Lax Path=/ session cookie.
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-zagrosi_csrf
+      description: Double-submit CSRF cookie paired with `X-Zagrosi-CSRF`.
+    OidcCsrfCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-zagrosi_oidc_csrf
+      description: OIDC callback state cookie.
+    BearerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: "pat_<43>, scim_<43>, svc_<43>"
+    ScimBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: scim_<43>
+  parameters:
+    UuidId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OrgSlug:
+      name: org_slug
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9][a-z0-9-]{1,62}$"
+    OrgIdpId:
+      name: org_idp_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DomainId:
+      name: domain_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema:
+        type: string
+      description: SCIM ETag precondition per RFC 7644 section 3.14.
+    ScimFilter:
+      name: filter
+      in: query
+      required: false
+      schema:
+        type: string
+      description: RFC 7644 section 3.4.2.2 filter expression.
+    StartIndex:
+      name: startIndex
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Count:
+      name: count
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 200
+        default: 100
+  headers:
+    SetCookie:
+      schema:
+        type: string
+      description: >
+        Session cookies use `__Host-zagrosi_sid; Path=/; Secure; HttpOnly;
+        SameSite=Lax`. CSRF cookies use `__Host-zagrosi_csrf; Path=/; Secure;
+        SameSite=Lax`.
+    RetryAfter:
+      schema:
+        type: integer
+        minimum: 0
+    RateLimitLimit:
+      schema:
+        type: integer
+    RateLimitRemaining:
+      schema:
+        type: integer
+    RateLimitReset:
+      schema:
+        type: integer
+    WWWAuthenticate:
+      schema:
+        type: string
+      examples:
+        bearer:
+          value: Bearer
+        scim:
+          value: Bearer realm="SCIM"
+    ETag:
+      schema:
+        type: string
+      description: SCIM `meta.version` ETag.
+  requestBodies:
+    ScimUser:
+      required: true
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimUser"
+    ScimGroup:
+      required: true
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimGroup"
+    ScimPatch:
+      required: true
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimPatchRequest"
+  responses:
+    Accepted:
+      description: Accepted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AcceptedResponse"
+    Problem400:
+      description: Bad request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem401:
+      description: Unauthorized.
+      headers:
+        WWW-Authenticate:
+          $ref: "#/components/headers/WWWAuthenticate"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem403:
+      description: Forbidden.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem404:
+      description: Not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem409:
+      description: Conflict.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Problem422:
+      description: Unprocessable entity.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: Rate limited.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        RateLimit-Limit:
+          $ref: "#/components/headers/RateLimitLimit"
+        RateLimit-Remaining:
+          $ref: "#/components/headers/RateLimitRemaining"
+        RateLimit-Reset:
+          $ref: "#/components/headers/RateLimitReset"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ScimList:
+      description: SCIM ListResponse.
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimListResponse"
+    ScimResource:
+      description: SCIM resource.
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
+      content:
+        application/scim+json:
+          schema:
+            type: object
+            additionalProperties: true
+    ScimUnauthorized:
+      description: SCIM bearer missing or invalid.
+      headers:
+        WWW-Authenticate:
+          $ref: "#/components/headers/WWWAuthenticate"
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimError"
+    ScimError404:
+      description: SCIM not found.
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimError"
+    ScimError409:
+      description: SCIM uniqueness conflict.
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimError"
+    ScimError412:
+      description: SCIM ETag precondition failed.
+      content:
+        application/scim+json:
+          schema:
+            $ref: "#/components/schemas/ScimError"
+  schemas:
+    AcceptedResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+    SignUpRequest:
+      type: object
+      required: [email, password, org_name]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+        org_name:
+          type: string
+          minLength: 1
+    SignInRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    SignInResponse:
+      type: object
+      required: [session]
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+    EmailRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+    TokenConfirmRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token:
+          $ref: "#/components/schemas/PrefixedToken"
+    PasswordResetConfirmRequest:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token:
+          $ref: "#/components/schemas/PrefixedToken"
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+    DiscoverRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        return_to:
+          type: string
+    DiscoverResponse:
+      type: object
+      required: [method]
+      properties:
+        method:
+          type: string
+          enum: [password, oidc, saml, picker]
+        start_url:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    Session:
+      type: object
+      required: [id, user_id, org_id, expires_at, version, amr]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+        amr:
+          type: array
+          items:
+            type: string
+        acr:
+          type:
+            - string
+            - "null"
+    SwitchOrgRequest:
+      type: object
+      required: [org_id, expected_version]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        expected_version:
+          type: integer
+          format: int64
+    CreateApiTokenRequest:
+      type: object
+      required: [display_name, scopes]
+      properties:
+        display_name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    ApiTokenView:
+      type: object
+      required: [id, display_name, scopes, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    IssuedApiToken:
+      allOf:
+        - $ref: "#/components/schemas/ApiTokenView"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              $ref: "#/components/schemas/PrefixedToken"
+    SamlAcsRequest:
+      type: object
+      required: [SAMLResponse, RelayState]
+      properties:
+        SAMLResponse:
+          type: string
+        RelayState:
+          type: string
+    CreateDomainRequest:
+      type: object
+      required: [domain]
+      properties:
+        domain:
+          type: string
+    DomainChallenge:
+      type: object
+      required: [id, domain, challenge_token, verified]
+      properties:
+        id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        challenge_token:
+          type: string
+          pattern: "^vrf_[A-Za-z0-9_-]{43}$"
+        verified:
+          type: boolean
+    CreateScimTokenRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: string
+    ScimTokenView:
+      type: object
+      required: [id, display_name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    IssuedScimToken:
+      allOf:
+        - $ref: "#/components/schemas/ScimTokenView"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              $ref: "#/components/schemas/PrefixedToken"
+    CreateServiceTokenRequest:
+      type: object
+      required: [display_name, allowed_subjects]
+      properties:
+        display_name:
+          type: string
+        allowed_subjects:
+          type: array
+          items:
+            type: string
+    ServiceTokenView:
+      type: object
+      required: [id, display_name, allowed_subjects, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        allowed_subjects:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    IssuedServiceToken:
+      allOf:
+        - $ref: "#/components/schemas/ServiceTokenView"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              $ref: "#/components/schemas/PrefixedToken"
+    PrefixedToken:
+      type: string
+      pattern: "^(sid|pat|scim|svc|vrf|rst)_[A-Za-z0-9_-]{43}$"
+      description: Token prefix is part of the SHA-256 hash input.
+    ScimUser:
+      type: object
+      additionalProperties: true
+    ScimGroup:
+      type: object
+      additionalProperties: true
+    ScimPatchRequest:
+      type: object
+      required: [Operations]
+      properties:
+        Operations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ScimListResponse:
+      type: object
+      required: [schemas, totalResults, Resources]
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+        totalResults:
+          type: integer
+        startIndex:
+          type: integer
+        itemsPerPage:
+          type: integer
+        Resources:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ScimError:
+      type: object
+      required: [schemas, status]
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          contains:
+            const: urn:ietf:params:scim:api:messages:2.0:Error
+        scimType:
+          type: string
+        detail:
+          type: string
+        status:
+          type: string
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string

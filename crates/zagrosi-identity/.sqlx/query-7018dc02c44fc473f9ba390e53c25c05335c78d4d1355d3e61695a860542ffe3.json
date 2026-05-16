@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE federated_identities\n            SET user_id = NULL\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7018dc02c44fc473f9ba390e53c25c05335c78d4d1355d3e61695a860542ffe3"
+}

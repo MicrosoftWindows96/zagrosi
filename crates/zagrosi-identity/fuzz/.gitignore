@@ -1,0 +1,8 @@
+# cargo-fuzz state lives outside the main workspace. Crash artifacts may embed
+# test-only master keys + plaintexts captured during a fuzz run, so they must
+# never reach the public branch.
+
+target/
+artifacts/
+corpus/*/
+!corpus/*/.gitkeep

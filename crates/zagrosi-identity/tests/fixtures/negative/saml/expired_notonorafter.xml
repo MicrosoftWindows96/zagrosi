@@ -1,0 +1,1 @@
+<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ID="expired"><SubjectConfirmationData NotOnOrAfter="2000-01-01T00:00:00Z"/></samlp:Response>

@@ -6,7 +6,34 @@ all-features = true
 [advisories]
 version = 2
 yanked  = "deny"
-ignore  = []
+ignore  = [
+    # RUSTSEC-2023-0071: Marvin Attack timing sidechannel on `rsa` 0.9.x.
+    # Pulled transitively via `openidconnect` 4.x for ID-token signature
+    # verification. Mitigation: the verifier path is verify-only against
+    # IdP-published JWKS material — we never sign with `rsa` and the
+    # private key never lives in this process. The Marvin attack
+    # recovers private keys; no key to recover here. No upstream fix
+    # available; tracked in `openidconnect`'s migration plan.
+    { id = "RUSTSEC-2023-0071", reason = "verify-only path; no private key in this process" },
+    # RUSTSEC-2026-0118 / -0119: hickory-proto 0.25.x DNSSEC validation
+    # DoS — an NSEC3 closest-encloser proof on crafted cross-zone
+    # responses can enter an unbounded loop. Pulled transitively via
+    # `hickory-resolver` 0.25.2 by the multi-IdP domain-verify path
+    # (section-13). Mitigation: the verify path queries a fixed pair of
+    # independently operated, trusted DNSSEC-validating upstreams
+    # (default 1.1.1.1 + 9.9.9.9), every per-resolver query is wrapped
+    # in a `tokio::time::timeout` (`DnsConfig::verify_timeout_ms`), the
+    # path is verify-only TXT (no DNSSEC key material in process) and is
+    # admin-triggered (not an unauthenticated high-volume surface). The
+    # unbounded loop is bounded in practice by the per-resolver timeout.
+    # The clean fix is the hickory-resolver 0.26.x upgrade, which is a
+    # breaking API migration of `routing/dns.rs` (config module reorg,
+    # `name_server` now private, `ResolveError`/`Lookup::iter` changes)
+    # tracked as a dedicated follow-up rather than bundled into the
+    # email-outbox change.
+    { id = "RUSTSEC-2026-0118", reason = "trusted pinned resolvers + bounded timeout; verify-only; hickory 0.26 port tracked separately" },
+    { id = "RUSTSEC-2026-0119", reason = "trusted pinned resolvers + bounded timeout; verify-only; hickory 0.26 port tracked separately" },
+]
 
 [licenses]
 version              = 2
@@ -23,6 +50,15 @@ allow = [
     "Zlib",
     "MPL-2.0",
     "AGPL-3.0-or-later",
+    # `webpki-roots` ships the Mozilla CA bundle under CDLA-Permissive-2.0.
+    # Permissive copyleft-free data licence; equivalent to MIT/Apache for
+    # our purposes (we redistribute the bundle bytes verbatim).
+    "CDLA-Permissive-2.0",
+    # `lettre` (email-outbox SMTP transport, section-14) ships under
+    # 0BSD — the BSD Zero Clause License, an OSI/FSF-approved
+    # public-domain-equivalent licence strictly more permissive than
+    # MIT (no attribution clause). Fully AGPL-compatible.
+    "0BSD",
 ]
 
 [[licenses.exceptions]]
@@ -37,14 +73,26 @@ allow = ["MIT", "Apache-2.0", "Unicode-DFS-2016"]
 ignore = true
 
 [bans]
-multiple-versions = "warn"
-wildcards         = "deny"
+multiple-versions    = "warn"
+wildcards            = "deny"
+# Workspace `path = "../foo"` deps are recorded as `*` versions in
+# Cargo.lock; allow them so cargo-deny only flags genuine `version = "*"`
+# constraints.
+allow-wildcard-paths = true
+
+# `openssl` + `openssl-sys` are banned at the workspace level so the
+# default build links rustls only. The `samael` SAML SP (gated behind
+# the `saml` feature on `zagrosi-identity`) is the single approved
+# wrapper: samael's xmlsec backend C-links libxmlsec1 + libxml2 +
+# openssl, which has no rustls equivalent. The wrapper carve-out is
+# limited to samael; any other crate that pulls openssl trips the ban.
+[[bans.deny]]
+name     = "openssl"
+wrappers = ["samael"]
 
 [[bans.deny]]
-name = "openssl"
-
-[[bans.deny]]
-name = "openssl-sys"
+name     = "openssl-sys"
+wrappers = ["samael", "openssl"]
 
 [[bans.deny]]
 name = "native-tls"
@@ -53,3 +101,6 @@ name = "native-tls"
 unknown-registry = "deny"
 unknown-git      = "deny"
 allow-registry   = ["https://github.com/rust-lang/crates.io-index"]
+# Unreleased upstream fix for samael 0.0.20's xmlsec 1.3.x binding
+# type mismatch on Ubuntu CI. Cargo.lock pins the exact commit.
+allow-git        = ["https://github.com/njaremko/samael.git"]

@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO failed_signin_aggregates (\n                id, org_id, user_id, ip, window_start, count,\n                first_attempt_at, last_attempt_at\n            )\n            VALUES ($1, $2, $3, $4, $5, 1, $6, $6)\n            ON CONFLICT (user_id, window_start) DO UPDATE\n                SET count = failed_signin_aggregates.count + 1,\n                    last_attempt_at = EXCLUDED.last_attempt_at\n            RETURNING count, (xmax = 0) AS \"first!: bool\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "first!: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Inet",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "2c769682b82e0faa232ab8333f36e4af2365393e0e32c784e205a9bf6fafb1e8"
+}
