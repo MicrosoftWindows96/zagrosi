@@ -61,7 +61,7 @@ paths:
     post:
       tags: [Auth]
       operationId: signIn
-      summary: Verify email and password and issue browser session cookies.
+      summary: Verify email and password and issue browser session cookies plus bearer fallback tokens.
       requestBody:
         required: true
         content:
@@ -91,13 +91,6 @@ paths:
       summary: Revoke the current browser session.
       security:
         - SessionCookie: []
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
       responses:
         "204":
           description: Signed out.
@@ -1155,10 +1148,37 @@ components:
           type: string
     SignInResponse:
       type: object
-      required: [session]
+      required: [status, session_id, session, session_token, csrf_token]
       properties:
+        status:
+          type: string
+          enum: [ok]
+        session_id:
+          type: string
+          format: uuid
         session:
-          $ref: "#/components/schemas/Session"
+          type: object
+          required: [id, user_id, expires_at]
+          properties:
+            id:
+              type: string
+              format: uuid
+            user_id:
+              type: string
+              format: uuid
+            org_id:
+              type: string
+              format: uuid
+              nullable: true
+            expires_at:
+              type: string
+              format: date-time
+        session_token:
+          $ref: "#/components/schemas/PrefixedToken"
+        csrf_token:
+          type: string
+          minLength: 43
+          maxLength: 43
     EmailRequest:
       type: object
       required: [email]

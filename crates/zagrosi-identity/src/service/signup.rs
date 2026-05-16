@@ -144,15 +144,18 @@ impl IdentityService {
         let mut tx = self.pool.begin().await?;
         let user = self
             .user_repo
-            .create(NewUser {
-                id: user_id,
-                email: &req.email,
-                display_name: &req.display_name,
-                password_hash: Some(&phc),
-                password_updated_at: Some(now),
-                password_hash_version: 1,
-                external_id: None,
-            })
+            .create_in_tx(
+                &mut tx,
+                NewUser {
+                    id: user_id,
+                    email: &req.email,
+                    display_name: &req.display_name,
+                    password_hash: Some(&phc),
+                    password_updated_at: Some(now),
+                    password_hash_version: 1,
+                    external_id: None,
+                },
+            )
             .await?;
         self.email_verification_repo
             .insert(

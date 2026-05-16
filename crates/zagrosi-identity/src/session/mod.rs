@@ -44,7 +44,10 @@ pub mod write_behind;
 
 pub use cache::{CachedSession, SessionCache};
 pub use continuation::SessionView;
-pub use cookie::{CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME, SessionAttachment};
+pub use cookie::{
+    CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME, SessionAttachment,
+    build_clear_csrf_cookie, build_clear_session_cookie,
+};
 pub use events::{BusError, SessionEventBus};
 pub use introspector::IdentitySessionIntrospector;
 pub use issuer::{IdentitySessionIssuer, generate_csrf_value};
