@@ -8,10 +8,10 @@ appVersion: "0.1.0"
 kubeVersion: ">=1.30.0"
 home: https://zagrosi.com
 sources:
-  - https://github.com/MicrosoftWindows96/zagrosi
+  - https://github.com/zagrosi-code/zagrosi
 maintainers:
   - name: Zagrosi Contributors
-    url: https://github.com/MicrosoftWindows96/zagrosi
+    url: https://github.com/zagrosi-code/zagrosi
     email: oss@zagrosi.com
 keywords:
   - zagrosi

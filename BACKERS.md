@@ -2,7 +2,7 @@
 
 Zagrosi is independently developed and funded by the people and companies listed below. Their support pays for the time that turns a public roadmap into shipped code.
 
-If you find Zagrosi useful, please consider [becoming a sponsor](https://github.com/sponsors/MicrosoftWindows96). Every contribution, monthly or one-time, goes back into the project.
+If you find Zagrosi useful, please consider [becoming a sponsor](https://github.com/sponsors/zagrosi-code). Every contribution, monthly or one-time, goes back into the project.
 
 ---
 
