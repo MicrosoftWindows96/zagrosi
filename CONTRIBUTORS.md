@@ -8,7 +8,7 @@ Code contributors license their work to the maintainer under dual-license terms:
 
 ## Maintainer
 
-The lead maintainer goes by the GitHub handle `MicrosoftWindows96`.
+The lead maintainer goes by the GitHub handle `zagrosi-code`.
 
 ## Code contributors
 

@@ -2,8 +2,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Discussions
-    url: https://github.com/MicrosoftWindows96/zagrosi/discussions
+    url: https://github.com/zagrosi-code/zagrosi/discussions
     about: General questions, ideas, and conversations belong in Discussions.
   - name: Security policy
-    url: https://github.com/MicrosoftWindows96/zagrosi/security/policy
+    url: https://github.com/zagrosi-code/zagrosi/security/policy
     about: Vulnerabilities are reported privately via the Security policy. Do not open a public issue.

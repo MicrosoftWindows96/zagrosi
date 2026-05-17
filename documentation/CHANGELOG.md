@@ -62,5 +62,5 @@ All notable changes to Zagrosi are documented in this file. The format follows [
 - `documentation/governance.md`: nine-section governance manual covering branch protection, release cadence, issue triage, maintainers, voting, license posture, Code of Conduct enforcement, security disclosure, and trademark. Includes release tooling, drift-detection automation outline, voting worked examples, Code of Conduct outcome catalogue, security GitHub-Temporary-Private-Fork mechanism, supported-versions transition matrix, and trademark worked examples.
 - `documentation/CHANGELOG.md`: this file (Keep a Changelog 1.1.0 format).
 
-[Unreleased]: https://github.com/MicrosoftWindows96/zagrosi/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/MicrosoftWindows96/zagrosi/releases/tag/v0.1.0
+[Unreleased]: https://github.com/zagrosi-code/zagrosi/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/zagrosi-code/zagrosi/releases/tag/v0.1.0
