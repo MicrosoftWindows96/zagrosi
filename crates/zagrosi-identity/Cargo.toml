@@ -103,6 +103,9 @@ quick-xml        = { workspace = true, optional = true }
 aws-lc-rs        = { workspace = true, optional = true }
 
 [dev-dependencies]
+# Dev-dep loop (identity -> test-support -> identity) is cargo-legal but
+# doubles identity's test builds; see crates/zagrosi-test-support/README.md.
+zagrosi-test-support   = { path = "../zagrosi-test-support" }
 proptest               = { workspace = true }
 tempfile               = { workspace = true }
 serial_test            = { workspace = true }

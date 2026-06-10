@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[package]
+name        = "zagrosi-test-support"
+version     = "0.1.0"
+description = "Dev-only integration-test harness for the Zagrosi workspace: role-pool Postgres containers on the custom image, ordered multi-crate migration runner, MinIO harness, shared fixtures."
+publish     = false
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+authors.workspace      = true
+readme                 = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+zagrosi-identity       = { path = "../zagrosi-identity" }
+sqlx                   = { workspace = true }
+uuid                   = { workspace = true }
+tokio                  = { workspace = true }
+thiserror              = { workspace = true }
+tracing                = { workspace = true }
+testcontainers-modules = { workspace = true }
+
+[dev-dependencies]
+serial_test = { workspace = true }

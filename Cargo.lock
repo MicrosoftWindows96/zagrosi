@@ -6213,7 +6213,22 @@ dependencies = [
  "validator",
  "wiremock",
  "zagrosi-core",
+ "zagrosi-test-support",
  "zeroize",
+]
+
+[[package]]
+name = "zagrosi-test-support"
+version = "0.1.0"
+dependencies = [
+ "serial_test",
+ "sqlx",
+ "testcontainers-modules",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "zagrosi-identity",
 ]
 
 [[package]]

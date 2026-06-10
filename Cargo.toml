@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members  = ["crates/zagrosi-core", "crates/zagrosi-identity", "apps/api-gateway"]
+members  = ["crates/zagrosi-core", "crates/zagrosi-identity", "crates/zagrosi-test-support", "apps/api-gateway"]
 exclude  = ["crates/zagrosi-identity/fuzz"]
 
 [workspace.package]
@@ -52,7 +52,7 @@ proptest               = "1"
 tempfile               = "3"
 serial_test            = "3"
 static_assertions      = "1.1"
-testcontainers-modules = { version = "0.15", features = ["postgres", "valkey"] }
+testcontainers-modules = { version = "0.15", features = ["postgres", "valkey", "minio"] }
 
 # Cryptography (secrets shim + token-hashing chokepoint + constant-time compare)
 aes-gcm   = { version = "0.10", default-features = false, features = ["aes", "alloc", "getrandom", "zeroize"] }

@@ -2,10 +2,13 @@
 
 //! Shared fixtures for `zagrosi-identity` integration tests.
 //!
-//! Spins up a fresh Postgres container per fixture invocation and
-//! runs every identity migration before yielding the pool. Mirrors
-//! the pattern in `tests/migrations_smoke.rs` so each new section's
-//! integration suite stays self-contained.
+//! Thin wrapper over the `zagrosi-test-support` harness: a fresh
+//! Postgres container (custom image) per fixture invocation, the four
+//! runtime roles bootstrapped, every registered migration set applied.
+//! `TestEnv.pool` hands out the **`zagrosi_app` pool** — tenant-shaped
+//! test traffic never connects as superuser (the repo-wide rule the
+//! harness enforces). Owner-level assertions belong on
+//! `env.db.migrate_pool()`.
 
 #![allow(dead_code)] // shared helpers used selectively per test file
 #![allow(unreachable_pub)] // each test binary includes this via `mod common;`
@@ -38,76 +41,43 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use std::error::Error;
 use std::time::Duration;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::ContainerAsync;
-use testcontainers_modules::testcontainers::ImageExt;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use uuid::Uuid;
 use zagrosi_identity::run_migrations;
-
-/// Default Postgres image tag — tracks the dev compose major.
-pub const PG_DEFAULT_TAG: &str = "18-alpine";
+use zagrosi_test_support::TestDb;
 
 /// Boxed dynamic error type so any failure lifts via `?`.
 pub type TestError = Box<dyn Error + Send + Sync>;
 /// Test return alias.
 pub type TestResult<T = ()> = Result<T, TestError>;
 
-/// Per-test container + pool. Drop order: pool first, then container.
+/// Per-test harness handle. Drop order: pool clone first, then the
+/// harness (which stops the container).
 pub struct TestEnv {
-    /// Pool wired to the container.
+    /// The `zagrosi_app` pool — the default for tenant-shaped traffic.
     pub pool: PgPool,
-    /// Owns the container lifetime.
-    _pg: ContainerAsync<Postgres>,
+    /// Full harness for role-specific access (`db.migrate_pool()`,
+    /// `db.auth_pool()`, `db.maintenance_pool()`, DSNs).
+    pub db: TestDb,
 }
 
-/// Spin up a fresh PG container at the requested tag.
-pub async fn pg_env(tag: &str) -> TestResult<TestEnv> {
-    let container = Postgres::default().with_tag(tag).start().await?;
-    let host = container.get_host().await?;
-    let port = container.get_host_port_ipv4(5432).await?;
-    let url = format!("postgres://postgres:postgres@{host}:{port}/postgres");
-    let pool = PgPoolOptions::new()
-        .max_connections(4)
-        .acquire_timeout(Duration::from_secs(15))
-        .connect(&url)
-        .await?;
-    Ok(TestEnv {
-        pool,
-        _pg: container,
-    })
-}
-
-/// Spin up a PG container, run every identity migration, return the
-/// ready pool.
+/// Boot the harness (custom image, four roles, all migration sets
+/// applied) and yield the app pool.
 pub async fn migrated_env() -> TestResult<TestEnv> {
-    let env = pg_env(PG_DEFAULT_TAG).await?;
-    run_migrations(&env.pool).await?;
-    Ok(env)
+    let db = TestDb::new().await?;
+    Ok(TestEnv {
+        pool: db.app_pool().clone(),
+        db,
+    })
 }
 
 /// Insert a minimal `orgs` row and return its UUID v7.
 pub async fn seed_org(pool: &PgPool, slug: &str) -> TestResult<Uuid> {
-    let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO orgs (id, slug, display_name) VALUES ($1, $2, $3)")
-        .bind(id)
-        .bind(slug)
-        .bind(slug)
-        .execute(pool)
-        .await?;
-    Ok(id)
+    Ok(zagrosi_test_support::seed_org(pool, slug).await?)
 }
 
 /// Insert a minimal `users` row and return its UUID v7.
 pub async fn seed_user(pool: &PgPool, email: &str) -> TestResult<Uuid> {
-    let id = Uuid::now_v7();
-    sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)")
-        .bind(id)
-        .bind(email)
-        .bind(email)
-        .execute(pool)
-        .await?;
-    Ok(id)
+    Ok(zagrosi_test_support::seed_user(pool, email).await?)
 }
 
 /// Environment variable that opts a process into the compose-backed

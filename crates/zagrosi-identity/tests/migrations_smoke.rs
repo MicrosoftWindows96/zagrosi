@@ -2,33 +2,23 @@
 
 //! Migration smoke + invariants for identity.
 //!
-//! These tests spin up an ephemeral `PostgreSQL` container per test
-//! via `testcontainers-modules`, run the embedded `sqlx::migrate!()`
-//! schema, and verify the invariants documented in the migration set.
+//! These tests boot the `zagrosi-test-support` harness (custom Postgres 18
+//! image, four runtime roles, ordered migration runner) per test and verify
+//! the invariants documented in the migration set. Schema-level probes run
+//! over the `zagrosi_migrate` pool — this file asserts owner-level DDL
+//! invariants, not tenant traffic.
 //!
-//! Running these tests requires a Docker daemon. The default tag is
-//! `18-alpine` (matches the dev compose Postgres). The PG-17 matrix
-//! variant pins `17-alpine`; CI splits PG-17 vs PG-18 via the
-//! integration-test compose.
+//! Running these tests requires a Docker daemon. `PostgreSQL` 18 is the
+//! platform floor (the custom image bundles `pg_partman`/`pg_parquet`; see
+//! `deploy/docker/postgres/README.md` "Managed Postgres requirements"), so
+//! the former PG-17 matrix variant is gone.
 
 use serial_test::serial;
 use sqlx::PgPool;
-use sqlx::Row;
-use sqlx::postgres::PgPoolOptions;
 use std::error::Error;
 use std::time::Duration;
-use testcontainers_modules::postgres::Postgres;
-use testcontainers_modules::testcontainers::ContainerAsync;
-use testcontainers_modules::testcontainers::ImageExt;
-use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use uuid::Uuid;
-use zagrosi_identity::run_migrations;
-
-/// Default Postgres image tag — tracks the dev compose major.
-const PG_DEFAULT_TAG: &str = "18-alpine";
-
-/// PG 17 tag for the matrix variant.
-const PG17_TAG: &str = "17-alpine";
+use zagrosi_test_support::TestDb;
 
 /// Expected migration version timestamps (filename leading numeric
 /// prefix). Used to assert manifest fidelity in the smoke test rather
@@ -63,40 +53,22 @@ type TestError = Box<dyn Error + Send + Sync>;
 type TestResult = Result<(), TestError>;
 
 /// Per-test fixture. Field declaration order *is* drop order: the pool
-/// closes before the container stops so connections do not race the
-/// container shutdown. Callers borrow `pool` directly and let `_pg`
-/// keep the container alive for the test's lifetime.
+/// clone closes before the harness (and its container) stops. Callers
+/// borrow `pool` directly and let `_db` keep the container alive.
 struct TestEnv {
     pool: PgPool,
-    _pg: ContainerAsync<Postgres>,
+    _db: TestDb,
 }
 
-/// Spin up a fresh Postgres container at the requested tag and
-/// connect a pool with conservative settings. The container handle
-/// must outlive the pool, so the caller receives both inside a
-/// `TestEnv` whose Drop ordering retires the pool first.
-async fn pg_env(tag: &str) -> Result<TestEnv, TestError> {
-    let container = Postgres::default().with_tag(tag).start().await?;
-    let host = container.get_host().await?;
-    let port = container.get_host_port_ipv4(5432).await?;
-    let url = format!("postgres://postgres:postgres@{host}:{port}/postgres");
-    let pool = PgPoolOptions::new()
-        .max_connections(4)
-        .acquire_timeout(Duration::from_secs(15))
-        .connect(&url)
-        .await?;
+/// Boot the harness (custom image, roles, all migrations applied) and
+/// yield the `zagrosi_migrate` pool — the owner-level connection this
+/// schema-smoke file asserts against.
+async fn migrated_env() -> Result<TestEnv, TestError> {
+    let db = TestDb::new().await?;
     Ok(TestEnv {
-        pool,
-        _pg: container,
+        pool: db.migrate_pool().clone(),
+        _db: db,
     })
-}
-
-/// Spin up a Postgres container, run every identity migration, and
-/// return a ready-to-use [`TestEnv`].
-async fn migrated_env(tag: &str) -> Result<TestEnv, TestError> {
-    let env = pg_env(tag).await?;
-    run_migrations(&env.pool).await?;
-    Ok(env)
 }
 
 /// Build a 32-byte BYTEA literal where every byte equals `byte`.
@@ -150,19 +122,19 @@ async fn seed_org_idp(pool: &PgPool, org_id: Uuid, protocol: &str) -> Result<Uui
 
 #[tokio::test]
 #[serial]
-async fn migrate_runs_clean_against_empty_db() -> TestResult {
-    let env = pg_env(PG_DEFAULT_TAG).await?;
+async fn identity_manifest_matches_expected_versions() -> TestResult {
+    // The harness itself proves the clean apply (it migrates a fresh
+    // container); this test pins the identity manifest fidelity. The
+    // history table is shared across migration sets (see test-support's
+    // migrations module), so filter to identity's versions.
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
-    run_migrations(&pool).await?;
-    let row = sqlx::query("SELECT COUNT(*)::BIGINT AS n FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await?;
-    let count: i64 = row.try_get("n")?;
-    assert_eq!(count, 20, "expected 20 migrations to be applied");
-    let versions: Vec<i64> =
-        sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
-            .fetch_all(&pool)
-            .await?;
+    let versions: Vec<i64> = sqlx::query_scalar(
+        "SELECT version FROM _sqlx_migrations WHERE version = ANY($1) ORDER BY version",
+    )
+    .bind(EXPECTED_VERSIONS.to_vec())
+    .fetch_all(&pool)
+    .await?;
     assert_eq!(
         versions,
         EXPECTED_VERSIONS.to_vec(),
@@ -178,13 +150,14 @@ async fn migrate_runs_clean_against_empty_db() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn migrate_is_idempotent() -> TestResult {
-    let env = pg_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
-    run_migrations(&pool).await?;
-    run_migrations(&pool).await?;
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await?;
+    zagrosi_test_support::run_all_migrations(&pool).await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM _sqlx_migrations WHERE version = ANY($1)")
+            .bind(EXPECTED_VERSIONS.to_vec())
+            .fetch_one(&pool)
+            .await?;
     assert_eq!(count, 20);
     Ok(())
 }
@@ -192,7 +165,7 @@ async fn migrate_is_idempotent() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn each_table_is_independently_droppable_and_reapplies() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let tables = [
         "group_memberships",
@@ -220,17 +193,23 @@ async fn each_table_is_independently_droppable_and_reapplies() -> TestResult {
         let stmt = format!("DROP TABLE {table} CASCADE");
         sqlx::query(&stmt).execute(&pool).await?;
     }
-    // Also clear the migrations bookkeeping so MIGRATOR will re-apply
-    // every embedded migration end-to-end, proving the bisect-friendly
-    // smoke check from the spec ("drop then re-apply just that file" —
-    // here we re-apply all 20 in one pass via the embedded migrator).
-    sqlx::query("DROP TABLE _sqlx_migrations")
+    // Also clear the IDENTITY rows from the migrations bookkeeping so the
+    // runner re-applies every identity migration end-to-end, proving the
+    // bisect-friendly smoke check from the spec. Scoped DELETE (not DROP):
+    // the history table is shared across migration sets, and dropping it
+    // would erase rbac/audit bookkeeping while their schema objects
+    // persist. The pool is the zagrosi_migrate role, so recreated objects
+    // keep the correct owner.
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = ANY($1)")
+        .bind(EXPECTED_VERSIONS.to_vec())
         .execute(&pool)
         .await?;
-    run_migrations(&pool).await?;
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await?;
+    zagrosi_test_support::run_all_migrations(&pool).await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM _sqlx_migrations WHERE version = ANY($1)")
+            .bind(EXPECTED_VERSIONS.to_vec())
+            .fetch_one(&pool)
+            .await?;
     assert_eq!(count, 20, "re-application should replay all 20 migrations");
     Ok(())
 }
@@ -238,7 +217,7 @@ async fn each_table_is_independently_droppable_and_reapplies() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn uuid_v7_sortable_by_creation_order() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let mut inserted_ids: Vec<Uuid> = Vec::with_capacity(8);
     for i in 0..8 {
@@ -276,7 +255,7 @@ async fn uuid_v7_sortable_by_creation_order() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn multi_tenant_tables_require_org_id() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = seed_user(&pool, "tenant@example.com").await?;
     let org_id = seed_org(&pool, "tenant-org").await?;
@@ -363,7 +342,7 @@ async fn multi_tenant_tables_require_org_id() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn users_email_lower_is_auto_populated() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = Uuid::now_v7();
     sqlx::query("INSERT INTO users (id, email, display_name) VALUES ($1, $2, $3)")
@@ -393,7 +372,7 @@ async fn users_email_lower_is_auto_populated() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn users_password_hash_version_defaults_to_one() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = seed_user(&pool, "pwver@example.com").await?;
     let version: i16 = sqlx::query_scalar("SELECT password_hash_version FROM users WHERE id = $1")
@@ -407,7 +386,7 @@ async fn users_password_hash_version_defaults_to_one() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn oidc_pending_auth_rejects_duplicate_active_state() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let org_id = seed_org(&pool, "oidc-org").await?;
     let idp_id = seed_org_idp(&pool, org_id, "oidc").await?;
@@ -463,7 +442,7 @@ async fn oidc_pending_auth_rejects_duplicate_active_state() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn oidc_refresh_tokens_chain_fk_holds() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = seed_user(&pool, "oidc-refresh@example.com").await?;
     let session_id = Uuid::now_v7();
@@ -510,7 +489,7 @@ async fn oidc_refresh_tokens_chain_fk_holds() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn saml_assertion_replay_unique_per_idp_assertion_id() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let org_id = seed_org(&pool, "saml-org").await?;
     let idp_id = seed_org_idp(&pool, org_id, "saml").await?;
@@ -545,7 +524,7 @@ async fn saml_assertion_replay_unique_per_idp_assertion_id() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn federated_identities_unique_anchor_with_tombstone() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = seed_user(&pool, "fed@example.com").await?;
     let org_id = seed_org(&pool, "fed-org").await?;
@@ -598,7 +577,7 @@ async fn federated_identities_unique_anchor_with_tombstone() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn failed_signin_aggregates_upsert_keys() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     // (a) NULL-user collapse: two NULL-user rows in the same window collide
     // because the (user_id, window_start) UNIQUE is NULLS NOT DISTINCT.
@@ -679,7 +658,7 @@ async fn failed_signin_aggregates_upsert_keys() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn service_tokens_token_hash_partial_unique() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let first_id = Uuid::now_v7();
     sqlx::query(
@@ -717,7 +696,7 @@ async fn service_tokens_token_hash_partial_unique() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn explain_session_lookup_uses_partial_index() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let user_id = seed_user(&pool, "session@example.com").await?;
     // Acquire a single connection so the session-level GUC change and the
@@ -747,7 +726,7 @@ async fn explain_session_lookup_uses_partial_index() -> TestResult {
 #[tokio::test]
 #[serial]
 async fn explain_users_email_lookup_uses_index() -> TestResult {
-    let env = migrated_env(PG_DEFAULT_TAG).await?;
+    let env = migrated_env().await?;
     let pool = env.pool.clone();
     let mut conn = pool.acquire().await?;
     sqlx::query("SET enable_seqscan = OFF")
@@ -768,15 +747,7 @@ async fn explain_users_email_lookup_uses_index() -> TestResult {
     Ok(())
 }
 
-#[tokio::test]
-#[serial]
-async fn migrations_apply_to_pg17() -> TestResult {
-    let env = pg_env(PG17_TAG).await?;
-    let pool = env.pool.clone();
-    run_migrations(&pool).await?;
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::BIGINT FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await?;
-    assert_eq!(count, 20);
-    Ok(())
-}
+// The former PG-17 matrix variant is intentionally gone: PostgreSQL 18 is
+// the platform floor now that the custom image bundles pg_partman and
+// pg_parquet. See deploy/docker/postgres/README.md ("Managed Postgres
+// requirements").
