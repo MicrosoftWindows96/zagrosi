@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE saml_pending_auth\n            SET used_at = $2\n            WHERE id = $1 AND used_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84df6e098194d019f8a157072e2a4759b46b5657caec83da5549f0e92fdaeff1"
+}

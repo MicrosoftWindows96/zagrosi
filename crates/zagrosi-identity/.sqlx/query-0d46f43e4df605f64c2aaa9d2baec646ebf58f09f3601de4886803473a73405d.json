@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE service_tokens\n            SET revoked_at = now()\n            WHERE id = $1 AND revoked_at IS NULL AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d46f43e4df605f64c2aaa9d2baec646ebf58f09f3601de4886803473a73405d"
+}

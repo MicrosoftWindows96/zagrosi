@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, org_idp_id, state_hash, nonce_hash, verifier_hash,\n                   csrf_cookie_hash, redirect_uri, created_at, expires_at, used_at\n            FROM oidc_pending_auth\n            WHERE state_hash = $1 AND used_at IS NULL\n            ",
+  "query": "\n            SELECT id, org_idp_id, state_hash, nonce_hash, verifier_hash,\n                   csrf_cookie_hash, redirect_uri, created_at, expires_at, used_at\n            FROM oidc_pending_auth\n            WHERE state_hash = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -72,5 +72,5 @@
       true
     ]
   },
-  "hash": "938df43d9ea37785750d513556cc7c3e3f65e8843e2256d0458979ad55cc7f18"
+  "hash": "7aa4ff4a093de219c976a7a96e0dc131a79aea4982daeabf0ae0d9f0d9e1ab66"
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE api_tokens\n            SET\n                last_used_at = GREATEST(COALESCE(last_used_at, $3), $3),\n                last_used_ip = CASE\n                    WHEN last_used_at IS NULL OR last_used_at < $3 THEN $4\n                    ELSE last_used_ip\n                END\n            WHERE org_id = $1 AND id = $2 AND revoked_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Inet"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a2f48c6ccd1f95f1aedaefd233db3ecc2d4e3ecd26fca5b08bc605335db1edde"
+}

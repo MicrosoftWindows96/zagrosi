@@ -49,7 +49,7 @@ Cross-cutting contracts:
 | R4 | Account enumeration. | Sign-up and reset request paths return uniform success; sign-in uses dummy verify for unknown email. | Timing still depends on infrastructure jitter. | `crates/zagrosi-identity/tests/password_flow.rs::signin_unknown_email_returns_invalid_credentials` |
 | R5 | Argon2 spraying. | Valkey sliding-window limits, lockout, and bounded Argon2 concurrency. | A very large botnet can still consume edge capacity. | `crates/zagrosi-identity/tests/rate_limit_valkey.rs::lockout_trips_at_threshold_and_admin_unlock_clears_state` |
 | R6 | Session replay after password reset. | Resolver rejects sessions created before `password_updated_at`. | Read replicas can lag within the configured database topology. | `crates/zagrosi-identity/tests/tenant_isolation.rs::session_find_is_hash_only_by_design` |
-| R7 | Cross-tenant data exposure. | Every multi-tenant repository is anchored on `org_id`; `with_org_context` sets `app.current_org_id`. | Future RLS rollout must preserve the helper contract. | `crates/zagrosi-identity/tests/tenant_isolation.rs::org_scoped_with_org_context_round_trip` |
+| R7 | Cross-tenant data exposure. | Every multi-tenant repository is anchored on `org_id`; `with_org_context` sets `app.org_id`. | Future RLS rollout must preserve the helper contract. | `crates/zagrosi-identity/tests/tenant_isolation.rs::org_scoped_with_org_context_round_trip` |
 | R8 | Performance target drift. | Criterion benches publish per-path numbers; warm session resolve is gated. | Hosted CI runners vary, so production qualification should use a stable bench runner. | `crates/zagrosi-identity/tests/bench_smoke.rs::bench_gate_script_fails_and_passes_on_fixture_estimates` |
 | R9 | OIDC callback substitution. | PKCE S256, state cookie binding, nonce validation, ID token validation, and RFC 9207 `iss`. | Provider misconfiguration can still route users to the wrong IdP. | `crates/zagrosi-identity/tests/oidc_negative.rs::rejects_rfc9207_iss_mismatch` |
 | R10 | OIDC refresh-token replay. | Refresh token chain records parent usage and revokes descendants on replay. | Provider outage can interrupt refresh renewal. | `crates/zagrosi-identity/tests/oidc_chain_invariants.rs::refresh_replay_revokes_chain` |
@@ -147,7 +147,7 @@ See `.env.example` for local placeholders.
 
 - Every multi-tenant table already carries `org_id`; repository helpers always
   anchor on the active organisation.
-- `with_org_context(tx, org_id)` sets `app.current_org_id` inside the
+- `with_org_context(tx, org_id)` sets `app.org_id` inside the
   transaction so row-level-security predicates can read the current tenant.
 - `Auditor`, `AuditEvent`, and `AuditEventV1` live in `zagrosi-core`.
   Identity wires `NoopAuditor` by default until a PostgreSQL auditor lands.

@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.org_idp_id, d.domain, d.challenge_token,\n                   d.verified_at, d.last_verified_via,\n                   d.priority, d.created_at, d.deleted_at\n            FROM org_idp_domains AS d\n            JOIN org_idps        AS i ON i.id = d.org_idp_id\n            WHERE i.org_id = $1\n              AND d.org_idp_id = $2\n              AND d.deleted_at IS NULL\n              AND i.deleted_at IS NULL\n            ORDER BY d.priority ASC, d.domain ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_idp_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "challenge_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_verified_via",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "priority",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3cf33d9b88c9036a4909da485d6b77d1e54994e65b93b3896eecbf6f484f1ff2"
+}

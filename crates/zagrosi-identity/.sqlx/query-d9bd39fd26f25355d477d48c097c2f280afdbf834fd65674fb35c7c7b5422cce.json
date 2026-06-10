@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, email, email_lower as \"email_lower!\",\n                display_name, email_verified_at, password_hash,\n                password_updated_at, password_hash_version,\n                mfa_enrolled_at, created_at, updated_at, deleted_at\n            FROM users\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                id, email, email_lower as \"email_lower!\",\n                display_name, email_verified_at, password_hash,\n                password_updated_at, password_hash_version,\n                mfa_enrolled_at, active, external_id, row_version,\n                created_at, updated_at, deleted_at\n            FROM users\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -50,16 +50,31 @@
       },
       {
         "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "row_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       }
@@ -80,9 +95,12 @@
       false,
       true,
       false,
+      true,
+      false,
+      false,
       false,
       true
     ]
   },
-  "hash": "a07d3291607c4c65f0549e6679f9ef65d38ddbd45efc864c0470553902fbdbaf"
+  "hash": "d9bd39fd26f25355d477d48c097c2f280afdbf834fd65674fb35c7c7b5422cce"
 }

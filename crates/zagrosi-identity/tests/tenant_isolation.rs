@@ -126,12 +126,36 @@ async fn org_scoped_with_org_context_round_trip() -> TestResult {
     // Inside a transaction, set the GUC and read it back.
     let mut tx = env.pool.begin().await?;
     zagrosi_identity::repo::with_org_context(&mut tx, org).await?;
-    let value: Option<String> =
-        sqlx::query_scalar("SELECT current_setting('app.current_org_id', true)")
-            .fetch_one(&mut *tx)
-            .await?;
+    let value: Option<String> = sqlx::query_scalar("SELECT current_setting('app.org_id', true)")
+        .fetch_one(&mut *tx)
+        .await?;
     tx.commit().await?;
     assert_eq!(value.as_deref(), Some(org.to_string()).as_deref());
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn with_user_context_round_trip() -> TestResult {
+    let env = migrated_env().await?;
+    let user = Uuid::now_v7();
+
+    // Inside a transaction, set the user GUC and read it back.
+    let mut tx = env.pool.begin().await?;
+    zagrosi_identity::repo::with_user_context(&mut tx, user).await?;
+    let value: Option<String> = sqlx::query_scalar("SELECT current_setting('app.user_id', true)")
+        .fetch_one(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    assert_eq!(value.as_deref(), Some(user.to_string()).as_deref());
+
+    // Transaction-local: gone after the txn ends, asserted in the
+    // exact NULLIF(...) IS NULL shape the section-05 policies use.
+    let unset: bool =
+        sqlx::query_scalar("SELECT NULLIF(current_setting('app.user_id', true), '') IS NULL")
+            .fetch_one(&env.pool)
+            .await?;
+    assert!(unset, "app.user_id must be unset outside the transaction");
     Ok(())
 }
 

@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE org_idp_domains AS d\n            SET verified_at = now(),\n                last_verified_via = $4\n            FROM org_idps AS i\n            WHERE d.org_idp_id = i.id\n              AND i.org_id = $1\n              AND d.org_idp_id = $2\n              AND d.id = $3\n              AND d.deleted_at IS NULL\n              AND i.deleted_at IS NULL\n            RETURNING d.id, d.org_idp_id, d.domain, d.challenge_token,\n                      d.verified_at, d.last_verified_via,\n                      d.priority, d.created_at, d.deleted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_idp_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "domain",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "challenge_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_verified_via",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "priority",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b7fa6125685066c510ceff8da8a70cfff4ee3de19ceac32ae9dac315e038eaa1"
+}

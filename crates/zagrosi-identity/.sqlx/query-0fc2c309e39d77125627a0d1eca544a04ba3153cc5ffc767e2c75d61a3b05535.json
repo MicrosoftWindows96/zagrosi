@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM saml_pending_auth\n            WHERE expires_at < $1 OR used_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0fc2c309e39d77125627a0d1eca544a04ba3153cc5ffc767e2c75d61a3b05535"
+}

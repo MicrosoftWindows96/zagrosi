@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, email, email_lower as \"email_lower!\",\n                display_name, email_verified_at, password_hash,\n                password_updated_at, password_hash_version,\n                mfa_enrolled_at, created_at, updated_at, deleted_at\n            FROM users\n            WHERE email_lower = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                u.id, u.email, u.email_lower as \"email_lower!\",\n                u.display_name, u.email_verified_at, u.password_hash,\n                u.password_updated_at, u.password_hash_version,\n                u.mfa_enrolled_at, u.active, u.external_id, u.row_version,\n                u.created_at, u.updated_at, u.deleted_at\n            FROM users u\n            JOIN user_org_memberships m\n              ON m.user_id = u.id\n            WHERE u.id = $2\n              AND m.org_id = $1\n              AND u.deleted_at IS NULL\n              AND m.deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -50,23 +50,39 @@
       },
       {
         "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "row_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -80,9 +96,12 @@
       false,
       true,
       false,
+      true,
+      false,
+      false,
       false,
       true
     ]
   },
-  "hash": "b92a174edbdd59c2b66e2e68f15c252eff27fef0ac665163e86dd865a9bf106f"
+  "hash": "3412c0b01272536f1ae5e6f40a0e4e89611b375e0327d661e6008405ff846e18"
 }

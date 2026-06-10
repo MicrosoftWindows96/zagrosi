@@ -184,9 +184,9 @@ pub async fn handler(
         .await
         .map_err(|err| internal_error("tx begin", &err.to_string()))?;
 
-    // Set the `app.current_org_id` GUC so the future RLS layer (the
-    // tenant-isolation crate) can refuse rows whose `org_id` does
-    // not match. Mirrors the OIDC service callback.
+    // Set the `app.org_id` GUC so the RLS layer (section-05's
+    // policies) can refuse rows whose `org_id` does not match.
+    // Mirrors the OIDC service callback.
     with_org_context(&mut tx, org_id)
         .await
         .map_err(|err| internal_error("with_org_context", &err.to_string()))?;

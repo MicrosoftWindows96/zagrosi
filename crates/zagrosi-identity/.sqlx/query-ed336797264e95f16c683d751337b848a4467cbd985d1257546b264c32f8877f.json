@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT set_config('app.current_org_id', $1::text, true)",
+  "query": "SELECT template_key FROM email_outbox WHERE to_address = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "set_config",
+        "name": "template_key",
         "type_info": "Text"
       }
     ],
@@ -15,8 +15,8 @@
       ]
     },
     "nullable": [
-      null
+      false
     ]
   },
-  "hash": "04bfdb6863fdb42ff560d1677ef2ca0f4a771ef2c54278387ff63746297a6361"
+  "hash": "ed336797264e95f16c683d751337b848a4467cbd985d1257546b264c32f8877f"
 }

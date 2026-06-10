@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO users (\n                id, email, display_name, password_hash,\n                password_updated_at, password_hash_version\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING\n                id, email, email_lower as \"email_lower!\",\n                display_name, email_verified_at, password_hash,\n                password_updated_at, password_hash_version,\n                mfa_enrolled_at, created_at, updated_at, deleted_at\n            ",
+  "query": "\n            INSERT INTO users (\n                id, email, display_name, password_hash,\n                password_updated_at, password_hash_version,\n                external_id\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            RETURNING\n                id, email, email_lower as \"email_lower!\",\n                display_name, email_verified_at, password_hash,\n                password_updated_at, password_hash_version,\n                mfa_enrolled_at, active, external_id, row_version,\n                created_at, updated_at, deleted_at\n            ",
   "describe": {
     "columns": [
       {
@@ -50,16 +50,31 @@
       },
       {
         "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "row_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 11,
+        "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       }
@@ -71,7 +86,8 @@
         "Text",
         "Text",
         "Timestamptz",
-        "Int2"
+        "Int2",
+        "Text"
       ]
     },
     "nullable": [
@@ -85,9 +101,12 @@
       false,
       true,
       false,
+      true,
+      false,
+      false,
       false,
       true
     ]
   },
-  "hash": "6dae596eb74d934944208a9165c9d639ddac0f7ac2d34e667bee346a88b9b217"
+  "hash": "aadfe99c702899c360d70469c253c1189e9937069911b27ad442eee81e353350"
 }

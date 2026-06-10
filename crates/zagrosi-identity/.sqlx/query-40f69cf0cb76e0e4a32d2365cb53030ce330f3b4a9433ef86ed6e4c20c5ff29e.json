@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO api_tokens (id, token_hash, user_id, org_id, display_name, scopes, expires_at)\n          VALUES ($1, $2, $3, $4, 'expired', '{}', $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40f69cf0cb76e0e4a32d2365cb53030ce330f3b4a9433ef86ed6e4c20c5ff29e"
+}

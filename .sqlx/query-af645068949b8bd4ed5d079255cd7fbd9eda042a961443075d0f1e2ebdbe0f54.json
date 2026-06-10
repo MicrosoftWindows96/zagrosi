@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT set_config('app.current_org_id', $1::text, true)",
+  "query": "SELECT set_config('app.org_id', $1::text, true)",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "04bfdb6863fdb42ff560d1677ef2ca0f4a771ef2c54278387ff63746297a6361"
+  "hash": "af645068949b8bd4ed5d079255cd7fbd9eda042a961443075d0f1e2ebdbe0f54"
 }

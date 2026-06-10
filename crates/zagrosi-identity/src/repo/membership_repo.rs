@@ -152,44 +152,21 @@ impl MembershipRepo {
         }))
     }
 
-    /// Lookup the live membership for `(user_id, org_id)`. Returns
-    /// `None` when the user is not a live member of the org. Used by
-    /// the OIDC callback to confirm a returning SSO user actually
-    /// belongs to the org the slug resolved to.
-    pub async fn find_for_user_org(
-        &self,
-        user_id: Uuid,
-        org_id: Uuid,
-    ) -> Result<Option<Membership>> {
-        let row = sqlx::query!(
-            r#"
-            SELECT id, user_id, org_id, basic_role, joined_via,
-                   jit_provisioned_at, created_at, deleted_at
-            FROM user_org_memberships
-            WHERE user_id = $1 AND org_id = $2 AND deleted_at IS NULL
-            "#,
-            user_id,
-            org_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(|r| Membership {
-            id: r.id,
-            user_id: r.user_id,
-            org_id: r.org_id,
-            basic_role: r.basic_role,
-            joined_via: r.joined_via,
-            jit_provisioned_at: r.jit_provisioned_at,
-            created_at: r.created_at,
-            deleted_at: r.deleted_at,
-        }))
-    }
-
     /// List live memberships for a user. Orders by `created_at` so
     /// the canonical "first membership" can be taken as the default
     /// active org for new sessions.
+    ///
+    /// Runs inside a short self-managed transaction with the
+    /// `app.user_id` GUC set ([`super::with_user_context`]): this read
+    /// is inherently user-scoped with no org context (the org-switcher
+    /// lists memberships across orgs before any org is chosen), so
+    /// section-05's org-or-self SELECT policy needs the user GUC. A
+    /// `find_for_user_in_tx` variant was deliberately not added — no
+    /// caller composes this listing into a larger transaction today;
+    /// the self-managed txn gives every caller the GUC for free.
     pub async fn find_for_user(&self, user_id: Uuid) -> Result<Vec<Membership>> {
+        let mut tx = self.pool.begin().await?;
+        super::with_user_context(&mut tx, user_id).await?;
         let rows = sqlx::query!(
             r#"
             SELECT id, user_id, org_id, basic_role, joined_via,
@@ -200,8 +177,9 @@ impl MembershipRepo {
             "#,
             user_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(rows
             .into_iter()

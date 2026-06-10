@@ -6152,6 +6152,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "zagrosi-db"
+version = "0.1.0"
+dependencies = [
+ "serial_test",
+ "sqlx",
+ "testcontainers-modules",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "zagrosi-identity"
 version = "0.1.0"
 dependencies = [

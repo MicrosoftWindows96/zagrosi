@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO sessions (id, token_hash, user_id, org_id,\n                              version, amr, expires_at)\n        VALUES ($1, $2, $3, $4, 0, ARRAY['pwd']::TEXT[], now() + INTERVAL '1 hour')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce558982cf10387b6fcd9b72c5a6e38522167ae02338e3bd96e6507516c8b040"
+}

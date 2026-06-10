@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id, u.email, u.email_lower as \"email_lower!\",\n                u.display_name, u.email_verified_at, u.password_hash,\n                u.password_updated_at, u.password_hash_version,\n                u.mfa_enrolled_at, u.active, u.external_id, u.row_version,\n                u.created_at, u.updated_at, u.deleted_at\n            FROM users u\n            JOIN user_org_memberships m ON m.user_id = u.id\n            WHERE m.org_id = $1\n              AND u.deleted_at IS NULL\n              AND m.deleted_at IS NULL\n            ORDER BY u.id ASC\n            OFFSET $2 LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_lower!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "email_verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "password_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "password_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "password_hash_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 8,
+        "name": "mfa_enrolled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "external_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "row_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "acf69b45685d3fc1ce5794476b219b2819730f8d923da116b40590d579a8ccfa"
+}

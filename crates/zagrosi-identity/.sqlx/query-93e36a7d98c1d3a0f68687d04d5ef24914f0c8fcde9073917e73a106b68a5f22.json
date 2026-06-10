@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scim_tokens\n            SET last_used_at = now(),\n                last_used_ip = $2\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Inet"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93e36a7d98c1d3a0f68687d04d5ef24914f0c8fcde9073917e73a106b68a5f22"
+}

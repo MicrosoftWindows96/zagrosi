@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members  = ["crates/zagrosi-core", "crates/zagrosi-identity", "crates/zagrosi-test-support", "apps/api-gateway"]
+members  = ["crates/zagrosi-core", "crates/zagrosi-db", "crates/zagrosi-identity", "crates/zagrosi-test-support", "apps/api-gateway"]
 exclude  = ["crates/zagrosi-identity/fuzz"]
 
 [workspace.package]

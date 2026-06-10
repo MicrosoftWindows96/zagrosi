@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, session_id, token_hash, prev_id,\n                   issued_at, used_at, revoked_at\n            FROM oidc_refresh_tokens\n            WHERE token_hash = $1\n              AND revoked_at IS NULL\n              AND used_at IS NULL\n            ",
+  "query": "\n            SELECT id, request_id, relay_state, org_idp_id,\n                   created_at, expires_at, used_at\n            FROM saml_pending_auth\n            WHERE relay_state = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -10,49 +10,49 @@
       },
       {
         "ordinal": 1,
-        "name": "session_id",
-        "type_info": "Uuid"
+        "name": "request_id",
+        "type_info": "Text"
       },
       {
         "ordinal": 2,
-        "name": "token_hash",
-        "type_info": "Bytea"
+        "name": "relay_state",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "prev_id",
+        "name": "org_idp_id",
         "type_info": "Uuid"
       },
       {
         "ordinal": 4,
-        "name": "issued_at",
+        "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 5,
-        "name": "used_at",
+        "name": "expires_at",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 6,
-        "name": "revoked_at",
+        "name": "used_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Bytea"
+        "Text"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      true,
       false,
-      true,
+      false,
+      false,
       true
     ]
   },
-  "hash": "200fdcb46878290659a2129b97bee366f76f7e7b8ef54e04c48f3aa48e8ddfb2"
+  "hash": "f4fb885157da083d9c5efb055a57ff2a235d86beeb83dc4ecc511bf4cec24f8f"
 }
