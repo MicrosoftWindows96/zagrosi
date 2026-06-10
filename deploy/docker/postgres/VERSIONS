@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Single source of truth for the custom Postgres image pins.
+# Sourced by smoke.sh, scripts/ensure-pg-image.sh, and the postgres-image
+# workflow (both build with --build-arg from this file, so a built image can
+# never contradict these pins; smoke.sh asserts the extension versions).
+# The Dockerfile ARG defaults mirror these values as a convenience for plain
+# `docker build` invocations.
+# Any change here requires bumping deploy/docker/postgres/IMAGE_TAG in the
+# same commit (tags are immutable).
+PG_MAJOR=18
+PG_PARTMAN_VERSION=5.4.3
+PG_PARQUET_VERSION=0.5.1
+CARGO_PGRX_VERSION=0.16.0

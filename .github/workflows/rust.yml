@@ -112,7 +112,9 @@ jobs:
   compose-smoke:
     name: compose smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Headroom for the ensure-pg-image build fallback (~25 min cold) during
+    # the bootstrap window before the custom image is published to GHCR.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - run: |
@@ -123,7 +125,9 @@ jobs:
   sso-integration:
     name: rust / sso-integration
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Headroom for the ensure-pg-image build fallback (~25 min cold) during
+    # the bootstrap window before the custom image is published to GHCR.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions-rust-lang/setup-rust-toolchain@2b1f5e9b395427c92ee4e3331786ca3c37afe2d7 # v1.16.0

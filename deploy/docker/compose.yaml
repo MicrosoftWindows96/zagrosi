@@ -1,20 +1,36 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Local development stack for Zagrosi: Postgres 18, Valkey 9, NATS 2.14.
+# Local development stack for Zagrosi: Postgres 18 (custom image with
+# pg_partman + pg_parquet), MinIO, Valkey 9, NATS 2.14.
 
 name: zagrosi
 
 services:
   postgres:
-    image: postgres:18-bookworm
+    # Default mirrors deploy/docker/postgres/IMAGE_TAG; update together.
+    image: ${ZAGROSI_PG_IMAGE:-ghcr.io/zagrosi-code/zagrosi-postgres:18-partman5.4.3-parquet0.5.1}
     restart: "no"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-zagrosi}
       PGDATA: /var/lib/postgresql/data/pgdata
+      # Low BGW interval so compose-smoke can assert partman ticks.
+      ZAGROSI_PARTMAN_INTERVAL: "30"
+      # Server-side S3 credentials for pg_parquet (COPY ... TO 's3://...').
+      # The application never handles archive credentials.
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
+      # pg_parquet 0.5.x: env-only opt-in for non-TLS endpoints; path-style
+      # addressing is its default, so MinIO needs no further switches.
+      AWS_ALLOW_HTTP: "true"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ../../infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      # File-level mount on purpose: a directory mount over
+      # /docker-entrypoint-initdb.d would shadow the image-baked
+      # 01-partman-bgw.sh preload/BGW templating hook.
+      - ../../infra/postgres/init/00-multi-db.sh:/docker-entrypoint-initdb.d/00-multi-db.sh:ro
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -23,6 +39,46 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: "no"
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # One-shot bucket provisioning: the audit archival path (and the dev
+  # ZAGROSI_AUDIT_ARCHIVE_URI) assume the bucket exists.
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      # Passed as env (not compose-interpolated into the command) so shell
+      # metacharacters in credentials cannot break or inject, and the values
+      # stay out of `docker inspect`'s command line.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000
+        "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        && mc mb --ignore-existing local/zagrosi-audit
 
   valkey:
     image: valkey/valkey:9.0-alpine
@@ -65,5 +121,6 @@ services:
 
 volumes:
   pg_data:
+  minio_data:
   valkey_data:
   nats_data:

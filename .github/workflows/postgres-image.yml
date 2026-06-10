@@ -1,0 +1,121 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Builds, smokes, and publishes the custom Postgres image
+# (deploy/docker/postgres). PRs touching the image dir build + smoke without
+# pushing; merges to main publish the IMAGE_TAG reference to GHCR; a weekly
+# run rebuilds against base-image security fixes and pushes a -rYYYYMMDD
+# refresh tag when the primary tag already exists (tags are immutable).
+#
+# One job with conditional push steps (instead of separate build/publish
+# jobs): the image is multi-GB and jobs do not share a local docker store,
+# so a second job would either rebuild (~25 min) or round-trip an artifact.
+name: postgres-image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "deploy/docker/postgres/**"
+      - ".github/workflows/postgres-image.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deploy/docker/postgres/**"
+      - ".github/workflows/postgres-image.yml"
+  workflow_dispatch:
+  schedule:
+    # Weekly refresh: pick up postgres:18-bookworm security fixes.
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-smoke-publish:
+    name: build-smoke-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build image
+        run: |
+          source deploy/docker/postgres/VERSIONS
+          IMAGE_TAG="$(cat deploy/docker/postgres/IMAGE_TAG)"
+          docker build \
+            --build-arg "PG_MAJOR=${PG_MAJOR}" \
+            --build-arg "PG_PARTMAN_VERSION=${PG_PARTMAN_VERSION}" \
+            --build-arg "PG_PARQUET_VERSION=${PG_PARQUET_VERSION}" \
+            --build-arg "CARGO_PGRX_VERSION=${CARGO_PGRX_VERSION}" \
+            -t "${IMAGE_TAG}" \
+            deploy/docker/postgres
+
+      - name: Smoke-test image
+        run: |
+          IMAGE_TAG="$(cat deploy/docker/postgres/IMAGE_TAG)"
+          bash deploy/docker/postgres/smoke.sh "${IMAGE_TAG}"
+
+      - name: Log in to GHCR
+        # Publishing happens only from main (push/schedule run there; a
+        # workflow_dispatch from another ref must never overwrite the
+        # production reference).
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+      - name: Publish
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          IMAGE_TAG="$(cat deploy/docker/postgres/IMAGE_TAG)"
+          # Distinguish tag-absence from network/auth failures: only a
+          # confirmed-absent manifest may be pushed (tags are immutable by
+          # policy; GHCR itself would happily overwrite).
+          set +e
+          inspect_out="$(docker manifest inspect "${IMAGE_TAG}" 2>&1)"
+          inspect_rc=$?
+          set -e
+          if [ "${inspect_rc}" -eq 0 ]; then
+            tag_state="exists"
+          elif echo "${inspect_out}" | grep -qiE "manifest unknown|not found|name unknown|MANIFEST_UNKNOWN"; then
+            tag_state="absent"
+          else
+            echo "::error::could not determine registry state for ${IMAGE_TAG}: ${inspect_out}"
+            exit 1
+          fi
+
+          if [ "${tag_state}" = "exists" ]; then
+            if [ "${EVENT_NAME}" = "schedule" ]; then
+              refresh_tag="${IMAGE_TAG}-r$(date -u +%Y%m%d)"
+              echo "primary tag exists; pushing refresh tag ${refresh_tag}"
+              docker tag "${IMAGE_TAG}" "${refresh_tag}"
+              docker push "${refresh_tag}"
+              title="postgres-image: weekly refresh published, IMAGE_TAG bump suggested"
+              body="The weekly rebuild pushed \`${refresh_tag}\` (base-image updates). Consider bumping \`deploy/docker/postgres/IMAGE_TAG\` so consumers pick up the refreshed base. Run: ${RUN_URL}"
+              existing="$(gh issue list --label postgres-image --state open --json number --jq '.[0].number // empty' || true)"
+              if [ -n "${existing}" ]; then
+                gh issue comment "${existing}" --body "${body}"
+              else
+                gh label create postgres-image --force >/dev/null 2>&1 || true
+                gh issue create --title "${title}" --label postgres-image --body "${body}"
+              fi
+            else
+              echo "::error::tag ${IMAGE_TAG} is already published and tags are immutable. deploy/docker/postgres/** changed without bumping IMAGE_TAG; bump it in the same PR."
+              exit 1
+            fi
+          else
+            docker push "${IMAGE_TAG}"
+          fi

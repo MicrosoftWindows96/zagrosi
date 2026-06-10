@@ -12,6 +12,11 @@ COMPOSE=(docker compose -f "${BASE_COMPOSE}" -f "${TEST_COMPOSE}")
 export POSTGRES_USER="${POSTGRES_USER:-zagrosi}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-smoke-test-password-not-secret}"
 export POSTGRES_DB="${POSTGRES_DB:-zagrosi}"
+export MINIO_ROOT_USER="${MINIO_ROOT_USER:-zagrosi-minio}"
+export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-smoke-minio-password-not-secret}"
+# Non-standard host ports: avoid colliding with a developer's own MinIO.
+export MINIO_PORT="${MINIO_PORT:-19000}"
+export MINIO_CONSOLE_PORT="${MINIO_CONSOLE_PORT:-19001}"
 export AUTHENTIK_SECRET_KEY="${AUTHENTIK_SECRET_KEY:-$(openssl rand -hex 32)}"
 export AUTHENTIK_BOOTSTRAP_PASSWORD="${AUTHENTIK_BOOTSTRAP_PASSWORD:-$(openssl rand -hex 16)}"
 export AUTHENTIK_BOOTSTRAP_TOKEN="${AUTHENTIK_BOOTSTRAP_TOKEN:-$(openssl rand -hex 32)}"
@@ -21,7 +26,7 @@ export ZAGROSI_TEST_SCIM_BEARER="${ZAGROSI_TEST_SCIM_BEARER:-scim_smoke_test_not
 dump_diagnostics() {
     echo "=== docker compose ps ==="
     "${COMPOSE[@]}" ps || true
-    for svc in postgres valkey nats authentik-server authentik-worker simplesamlphp mailpit; do
+    for svc in postgres minio minio-init valkey nats authentik-server authentik-worker simplesamlphp mailpit; do
         echo "=== docker compose logs ${svc} ==="
         "${COMPOSE[@]}" logs --no-color "${svc}" || true
     done
@@ -64,6 +69,11 @@ probe() {
         return 1
     fi
 }
+
+echo "==> Ensuring custom Postgres image is available"
+# shellcheck source=scripts/ensure-pg-image.sh
+source "${SCRIPT_DIR}/ensure-pg-image.sh"
+ensure_pg_image
 
 echo "==> Bringing up SSO compose stack"
 "${COMPOSE[@]}" up -d

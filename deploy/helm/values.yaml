@@ -23,6 +23,15 @@ web:
 
 postgres:
   enabled: false
+  # Self-hosted Postgres must run the Zagrosi custom image (pg_partman +
+  # pg_parquet) or satisfy the "Managed Postgres requirements" section of
+  # deploy/docker/postgres/README.md.
+  # The image's BGW templating reads plain container env for any future
+  # statefulset template: ZAGROSI_PARTMAN_DBNAME, ZAGROSI_PARTMAN_ROLE,
+  # ZAGROSI_PARTMAN_INTERVAL.
+  image:
+    repository: ghcr.io/zagrosi-code/zagrosi-postgres
+    tag: ""  # pin to deploy/docker/postgres/IMAGE_TAG value at deploy time
 valkey:
   enabled: false
 nats:
