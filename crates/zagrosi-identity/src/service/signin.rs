@@ -120,22 +120,25 @@ impl IdentityService {
                     .await?;
 
                 self.auditor
-                    .record(AuditEvent::V1(AuditEventV1::new(
-                        AuditEventKind::SigninSuccess,
-                        AuditActor::User {
-                            user_id: user.id,
-                            ip: Some(req.ip),
-                        },
-                        AuditResource::Session {
+                    .record(AuditEvent::V1(
+                        AuditEventV1::builder(
+                            AuditEventKind::SigninSuccess,
+                            AuditActor::User {
+                                user_id: user.id,
+                                ip: Some(req.ip),
+                            },
+                            None,
+                            req.correlation_id,
+                        )
+                        .resource(AuditResource::Session {
                             session_id: session.id,
-                        },
-                        req.correlation_id,
-                        Uuid::nil(),
-                        AuditPayload::new(serde_json::json!({
+                        })
+                        .metadata(AuditPayload::new(serde_json::json!({
                             "auth_method": "password",
                             "user_id": user.id,
-                        })),
-                    )))
+                        })))
+                        .build(),
+                    ))
                     .await;
                 Ok(session)
             }
@@ -237,22 +240,24 @@ impl IdentityService {
         let Ok(upsert) = upsert else { return };
         if upsert.first_in_window {
             self.auditor
-                .record(AuditEvent::V1(AuditEventV1::new(
-                    AuditEventKind::SigninFailed,
-                    user_id.map_or(AuditActor::Anonymous { ip: Some(ip) }, |uid| {
-                        AuditActor::User {
-                            user_id: uid,
-                            ip: Some(ip),
-                        }
-                    }),
-                    AuditResource::None,
-                    correlation_id,
-                    Uuid::nil(),
-                    AuditPayload::new(serde_json::json!({
+                .record(AuditEvent::V1(
+                    AuditEventV1::builder(
+                        AuditEventKind::SigninFailed,
+                        user_id.map_or(AuditActor::Anonymous { ip: Some(ip) }, |uid| {
+                            AuditActor::User {
+                                user_id: uid,
+                                ip: Some(ip),
+                            }
+                        }),
+                        None,
+                        correlation_id,
+                    )
+                    .metadata(AuditPayload::new(serde_json::json!({
                         "ip": ip.to_string(),
                         "count": upsert.count,
-                    })),
-                )))
+                    })))
+                    .build(),
+                ))
                 .await;
         }
     }

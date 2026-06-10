@@ -95,17 +95,22 @@ impl IdentityService {
         tx.commit().await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::PasswordResetRequested,
-                AuditActor::User {
-                    user_id: user.id,
-                    ip: Some(req.ip),
-                },
-                AuditResource::User { user_id: user.id },
-                req.correlation_id,
-                Uuid::nil(),
-                AuditPayload::new(serde_json::json!({"ip": req.ip.to_string()})),
-            )))
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::PasswordResetRequested,
+                    AuditActor::User {
+                        user_id: user.id,
+                        ip: Some(req.ip),
+                    },
+                    None,
+                    req.correlation_id,
+                )
+                .resource(AuditResource::User { user_id: user.id })
+                .metadata(AuditPayload::new(
+                    serde_json::json!({"ip": req.ip.to_string()}),
+                ))
+                .build(),
+            ))
             .await;
         Ok(())
     }
@@ -168,19 +173,22 @@ impl IdentityService {
         tx.commit().await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::PasswordChanged,
-                AuditActor::User {
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::PasswordChanged,
+                    AuditActor::User {
+                        user_id: row.user_id,
+                        ip: None,
+                    },
+                    None,
+                    req.correlation_id,
+                )
+                .resource(AuditResource::User {
                     user_id: row.user_id,
-                    ip: None,
-                },
-                AuditResource::User {
-                    user_id: row.user_id,
-                },
-                req.correlation_id,
-                Uuid::nil(),
-                AuditPayload::new(serde_json::json!({"flow": "reset"})),
-            )))
+                })
+                .metadata(AuditPayload::new(serde_json::json!({"flow": "reset"})))
+                .build(),
+            ))
             .await;
         Ok(())
     }

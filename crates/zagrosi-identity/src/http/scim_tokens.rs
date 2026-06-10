@@ -40,8 +40,7 @@ use sha2::{Digest, Sha256};
 use sqlx::types::ipnetwork::IpNetwork;
 use uuid::Uuid;
 use zagrosi_core::{
-    AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditPayload, AuditResource, Auditor,
-    AuthContext, ServiceName,
+    AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditResource, Auditor, AuthContext,
 };
 
 use crate::error::{IdentityError, Result};
@@ -375,18 +374,17 @@ async fn record_create(
     token_id: Uuid,
     correlation: Uuid,
 ) {
-    let event = AuditEventV1::new(
+    let event = AuditEventV1::builder(
         AuditEventKind::ServiceTokenCreated,
         AuditActor::User {
             user_id: actor_id,
             ip: None,
         },
-        AuditResource::ScimToken { token_id },
+        Some(org_id),
         correlation,
-        org_id,
-        AuditPayload::new(serde_json::json!({})),
-    );
-    let _ = ServiceName::parse("scim-tokens");
+    )
+    .resource(AuditResource::ScimToken { token_id })
+    .build();
     auditor.record(AuditEvent::V1(event)).await;
 }
 
@@ -397,17 +395,17 @@ async fn record_revoke(
     token_id: Uuid,
     correlation: Uuid,
 ) {
-    let event = AuditEventV1::new(
+    let event = AuditEventV1::builder(
         AuditEventKind::ServiceTokenRevoked,
         AuditActor::User {
             user_id: actor_id,
             ip: None,
         },
-        AuditResource::ScimToken { token_id },
+        Some(org_id),
         correlation,
-        org_id,
-        AuditPayload::new(serde_json::json!({})),
-    );
+    )
+    .resource(AuditResource::ScimToken { token_id })
+    .build();
     auditor.record(AuditEvent::V1(event)).await;
 }
 

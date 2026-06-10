@@ -118,14 +118,18 @@ impl IdentityService {
             tx.commit().await?;
 
             self.auditor
-                .record(AuditEvent::V1(AuditEventV1::new(
-                    AuditEventKind::SignupEmailCollisionAttempted,
-                    AuditActor::Anonymous { ip: Some(req.ip) },
-                    AuditResource::None,
-                    req.correlation_id,
-                    Uuid::nil(),
-                    AuditPayload::new(serde_json::json!({"ip": req.ip.to_string()})),
-                )))
+                .record(AuditEvent::V1(
+                    AuditEventV1::builder(
+                        AuditEventKind::SignupEmailCollisionAttempted,
+                        AuditActor::Anonymous { ip: Some(req.ip) },
+                        None,
+                        req.correlation_id,
+                    )
+                    .metadata(AuditPayload::new(
+                        serde_json::json!({"ip": req.ip.to_string()}),
+                    ))
+                    .build(),
+                ))
                 .await;
             return Ok(STABLE_RESPONSE);
         }
@@ -189,20 +193,23 @@ impl IdentityService {
         tx.commit().await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::SignupCreated,
-                AuditActor::User {
-                    user_id,
-                    ip: Some(req.ip),
-                },
-                AuditResource::User { user_id },
-                req.correlation_id,
-                Uuid::nil(),
-                AuditPayload::new(serde_json::json!({
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::SignupCreated,
+                    AuditActor::User {
+                        user_id,
+                        ip: Some(req.ip),
+                    },
+                    None,
+                    req.correlation_id,
+                )
+                .resource(AuditResource::User { user_id })
+                .metadata(AuditPayload::new(serde_json::json!({
                     "user_id": user_id,
                     "ip": req.ip.to_string(),
-                })),
-            )))
+                })))
+                .build(),
+            ))
             .await;
 
         Ok(STABLE_RESPONSE)

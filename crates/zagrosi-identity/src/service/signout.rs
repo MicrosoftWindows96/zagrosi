@@ -34,14 +34,12 @@ impl IdentityService {
             }
         });
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::SessionRevoked,
-                actor,
-                AuditResource::Session { session_id },
-                correlation_id,
-                Uuid::nil(),
-                AuditPayload::new(serde_json::json!({"reason": "sign_out"})),
-            )))
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(AuditEventKind::SessionRevoked, actor, None, correlation_id)
+                    .resource(AuditResource::Session { session_id })
+                    .metadata(AuditPayload::new(serde_json::json!({"reason": "sign_out"})))
+                    .build(),
+            ))
             .await;
         Ok(())
     }

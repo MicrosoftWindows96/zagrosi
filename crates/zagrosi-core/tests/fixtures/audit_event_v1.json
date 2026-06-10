@@ -11,8 +11,12 @@
     "kind": "session",
     "session_id": "00000000-0000-0000-0000-000000000003"
   },
+  "resource_type": "session",
+  "resource_id": "00000000-0000-0000-0000-000000000003",
+  "before": null,
+  "after": null,
   "correlation_id": "00000000-0000-0000-0000-000000000004",
   "occurred_at": "2026-01-01T00:00:00Z",
   "org_id": "00000000-0000-0000-0000-000000000005",
-  "payload": {}
+  "metadata": {}
 }

@@ -6,9 +6,7 @@
 
 use chrono::Utc;
 use uuid::Uuid;
-use zagrosi_core::{
-    AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditPayload, AuditResource,
-};
+use zagrosi_core::{AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditResource};
 
 use super::IdentityService;
 use crate::domain::{TokenPrefix, hash_token, parse_raw};
@@ -62,19 +60,21 @@ impl IdentityService {
         tx.commit().await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::EmailVerified,
-                AuditActor::User {
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::EmailVerified,
+                    AuditActor::User {
+                        user_id: row.user_id,
+                        ip: None,
+                    },
+                    None,
+                    req.correlation_id,
+                )
+                .resource(AuditResource::User {
                     user_id: row.user_id,
-                    ip: None,
-                },
-                AuditResource::User {
-                    user_id: row.user_id,
-                },
-                req.correlation_id,
-                Uuid::nil(),
-                AuditPayload::new(serde_json::json!({})),
-            )))
+                })
+                .build(),
+            ))
             .await;
         Ok(())
     }

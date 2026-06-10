@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use sqlx::QueryBuilder;
 use uuid::Uuid;
 use zagrosi_core::{
-    AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditPayload, AuditResource, ServiceName,
+    AuditActor, AuditEvent, AuditEventKind, AuditEventV1, AuditPayload, ServiceName,
 };
 
 use crate::domain::Group;
@@ -663,16 +663,16 @@ async fn audit_group(
     let Ok(service_name) = ServiceName::parse("scim-server") else {
         return;
     };
-    let event = AuditEventV1::new(
+    let event = AuditEventV1::builder(
         kind,
         AuditActor::Service { service_name },
-        AuditResource::None,
+        Some(org_id),
         Uuid::now_v7(),
-        org_id,
-        AuditPayload::new(json!({
-            "scim_token_id": token_id.to_string(),
-            "group_id": group_id.to_string()
-        })),
-    );
+    )
+    .metadata(AuditPayload::new(json!({
+        "scim_token_id": token_id.to_string(),
+        "group_id": group_id.to_string()
+    })))
+    .build();
     state.auditor.record(AuditEvent::V1(event)).await;
 }

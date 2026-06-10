@@ -263,13 +263,13 @@ impl RefreshChain {
                 );
                 return ReplayOutcome {
                     committed: false,
-                    org_id: Uuid::nil(),
+                    org_id: None,
                     user_id: None,
                 };
             }
         };
 
-        let (org_id_opt, user_id_opt) = match self
+        let (org_id, user_id_opt) = match self
             .sessions
             .find_org_user_for_session_in_tx(&mut tx, session_id)
             .await
@@ -285,12 +285,11 @@ impl RefreshChain {
                 let _ = tx.rollback().await;
                 return ReplayOutcome {
                     committed: false,
-                    org_id: Uuid::nil(),
+                    org_id: None,
                     user_id: None,
                 };
             }
         };
-        let org_id = org_id_opt.unwrap_or_else(Uuid::nil);
 
         if let Err(err) = self
             .repo
@@ -344,35 +343,42 @@ impl RefreshChain {
         }
     }
 
-    async fn emit_replay_audits(&self, session_id: Uuid, org_id: Uuid, correlation_id: Uuid) {
+    async fn emit_replay_audits(
+        &self,
+        session_id: Uuid,
+        org_id: Option<Uuid>,
+        correlation_id: Uuid,
+    ) {
         let resource = zagrosi_core::AuditResource::Session { session_id };
         self.auditor
             .record(zagrosi_core::AuditEvent::V1(
-                zagrosi_core::AuditEventV1::new(
+                zagrosi_core::AuditEventV1::builder(
                     zagrosi_core::AuditEventKind::OidcRefreshReplay,
                     zagrosi_core::AuditActor::System,
-                    resource.clone(),
-                    correlation_id,
                     org_id,
-                    zagrosi_core::AuditPayload::new(serde_json::json!({
-                        "session_id": session_id,
-                    })),
-                ),
+                    correlation_id,
+                )
+                .resource(resource.clone())
+                .metadata(zagrosi_core::AuditPayload::new(serde_json::json!({
+                    "session_id": session_id,
+                })))
+                .build(),
             ))
             .await;
         self.auditor
             .record(zagrosi_core::AuditEvent::V1(
-                zagrosi_core::AuditEventV1::new(
+                zagrosi_core::AuditEventV1::builder(
                     zagrosi_core::AuditEventKind::SuspectedTokenReplay,
                     zagrosi_core::AuditActor::System,
-                    resource,
-                    correlation_id,
                     org_id,
-                    zagrosi_core::AuditPayload::new(serde_json::json!({
-                        "session_id": session_id,
-                        "kind": "oidc_refresh",
-                    })),
-                ),
+                    correlation_id,
+                )
+                .resource(resource)
+                .metadata(zagrosi_core::AuditPayload::new(serde_json::json!({
+                    "session_id": session_id,
+                    "kind": "oidc_refresh",
+                })))
+                .build(),
             ))
             .await;
     }
@@ -380,23 +386,24 @@ impl RefreshChain {
     async fn emit_replay_revoke_failed_audit(
         &self,
         session_id: Uuid,
-        org_id: Uuid,
+        org_id: Option<Uuid>,
         correlation_id: Uuid,
     ) {
         let resource = zagrosi_core::AuditResource::Session { session_id };
         self.auditor
             .record(zagrosi_core::AuditEvent::V1(
-                zagrosi_core::AuditEventV1::new(
+                zagrosi_core::AuditEventV1::builder(
                     zagrosi_core::AuditEventKind::SigninFailed,
                     zagrosi_core::AuditActor::System,
-                    resource,
-                    correlation_id,
                     org_id,
-                    zagrosi_core::AuditPayload::new(serde_json::json!({
-                        "sub_reason": "replay_revoke_failed",
-                        "session_id": session_id,
-                    })),
-                ),
+                    correlation_id,
+                )
+                .resource(resource)
+                .metadata(zagrosi_core::AuditPayload::new(serde_json::json!({
+                    "sub_reason": "replay_revoke_failed",
+                    "session_id": session_id,
+                })))
+                .build(),
             ))
             .await;
     }
@@ -405,7 +412,7 @@ impl RefreshChain {
 /// Inner-tx outcome for [`RefreshChain::run_replay_revoke_tx`].
 struct ReplayOutcome {
     committed: bool,
-    org_id: Uuid,
+    org_id: Option<Uuid>,
     user_id: Option<Uuid>,
 }
 

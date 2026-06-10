@@ -33,6 +33,7 @@ use zagrosi_core::{
     AuditEvent, AuditEventKind, AuditEventV1, AuditPayload, AuditResource, AuthContext,
 };
 
+use crate::domain::OrgIdpDomain;
 use crate::domain::token_format::{TokenPrefix, mint};
 use crate::error::{IdentityError, Result};
 use crate::repo::{NewOrgIdpDomain, OrgScoped};
@@ -122,20 +123,18 @@ pub async fn create_domain(
         })
         .await?;
 
-    state
-        .auditor
-        .record(AuditEvent::V1(AuditEventV1::new(
-            AuditEventKind::IdpDomainCreated,
-            actor_from(&auth),
-            AuditResource::IdpDomain { domain_id: row.id },
-            auth.correlation_id(),
-            org_id,
-            AuditPayload::new(serde_json::json!({
-                "org_idp_id": org_idp_id,
-                "domain_lower": normalised_domain,
-            })),
-        )))
-        .await;
+    emit_domain_audit(
+        state.auditor.as_ref(),
+        &auth,
+        AuditEventKind::IdpDomainCreated,
+        org_id,
+        row.id,
+        serde_json::json!({
+            "org_idp_id": org_idp_id,
+            "domain_lower": normalised_domain,
+        }),
+    )
+    .await;
 
     let body = CreateDomainResponse {
         id: row.id,
@@ -177,15 +176,18 @@ pub async fn verify_domain(
         // mint one before verify can run. Audit the failure so the
         // event family stays consistent — every failure outcome of
         // this handler emits `IdpDomainFailed`.
-        emit_failed_audit(
+        emit_domain_audit(
             state.auditor.as_ref(),
             &auth,
-            row.id,
+            AuditEventKind::IdpDomainFailed,
             org_id,
-            org_idp_id,
-            &normalised_domain,
-            "",
-            MISSING_CHALLENGE_TOKEN_SLUG,
+            row.id,
+            failed_payload(
+                org_idp_id,
+                &normalised_domain,
+                "",
+                MISSING_CHALLENGE_TOKEN_SLUG,
+            ),
         )
         .await;
         return Err(IdentityError::DomainVerificationFailed {
@@ -204,19 +206,7 @@ pub async fn verify_domain(
     if let Some(VerifyOutcome::Verified { resolver_path }) =
         state.domain_cache.get(&cache_key).await
     {
-        // Cached success: return the row's existing `verified_at` +
-        // `last_verified_via` without re-mutating the DB or emitting
-        // a duplicate audit event. The first verify within the TTL
-        // window is the authoritative one.
-        let body = VerifyDomainResponse {
-            id: row.id,
-            domain: row.domain,
-            last_verified_via: row
-                .last_verified_via
-                .unwrap_or_else(|| resolver_path.clone()),
-            verified_at: row.verified_at.unwrap_or_else(chrono::Utc::now),
-        };
-        return Ok((StatusCode::OK, Json(body)).into_response());
+        return Ok(cached_verified_response(&row, resolver_path));
     }
 
     let outcome = state
@@ -231,21 +221,19 @@ pub async fn verify_domain(
                 .mark_verified(org_idp_id, domain_id, &resolver_path)
                 .await?;
             let verified_at = updated.verified_at.unwrap_or_else(chrono::Utc::now);
-            state
-                .auditor
-                .record(AuditEvent::V1(AuditEventV1::new(
-                    AuditEventKind::IdpDomainVerified,
-                    actor_from(&auth),
-                    AuditResource::IdpDomain { domain_id: row.id },
-                    auth.correlation_id(),
-                    org_id,
-                    AuditPayload::new(serde_json::json!({
-                        "org_idp_id": org_idp_id,
-                        "domain_lower": normalised_domain,
-                        "resolver_path": resolver_path,
-                    })),
-                )))
-                .await;
+            emit_domain_audit(
+                state.auditor.as_ref(),
+                &auth,
+                AuditEventKind::IdpDomainVerified,
+                org_id,
+                row.id,
+                serde_json::json!({
+                    "org_idp_id": org_idp_id,
+                    "domain_lower": normalised_domain,
+                    "resolver_path": resolver_path,
+                }),
+            )
+            .await;
             let body = VerifyDomainResponse {
                 id: updated.id,
                 domain: updated.domain,
@@ -258,15 +246,18 @@ pub async fn verify_domain(
             reason,
             resolver_path,
         } => {
-            emit_failed_audit(
+            emit_domain_audit(
                 state.auditor.as_ref(),
                 &auth,
-                row.id,
+                AuditEventKind::IdpDomainFailed,
                 org_id,
-                org_idp_id,
-                &normalised_domain,
-                resolver_path.as_str(),
-                reason.slug(),
+                row.id,
+                failed_payload(
+                    org_idp_id,
+                    &normalised_domain,
+                    resolver_path.as_str(),
+                    reason.slug(),
+                ),
             )
             .await;
             Err(IdentityError::DomainVerificationFailed {
@@ -282,37 +273,56 @@ pub async fn verify_domain(
 /// ops dashboards group it correctly.
 const MISSING_CHALLENGE_TOKEN_SLUG: &str = "missing_challenge_token";
 
-/// Emit the `IdpDomainFailed` audit event with the canonical payload
-/// shape. Lifted into a helper so the resolver-failure branch and
-/// the empty-token branch share one source of truth.
-#[allow(clippy::too_many_arguments)]
-async fn emit_failed_audit(
+/// Emit one `IdpDomain*` audit event with the resource + builder
+/// scaffolding shared by the create / verify / failed / delete handlers.
+async fn emit_domain_audit(
     auditor: &dyn zagrosi_core::Auditor,
     auth: &AuthContext,
-    domain_row_id: Uuid,
+    kind: AuditEventKind,
     org_id: Uuid,
+    domain_row_id: Uuid,
+    metadata: serde_json::Value,
+) {
+    auditor
+        .record(AuditEvent::V1(
+            AuditEventV1::builder(kind, actor_from(auth), Some(org_id), auth.correlation_id())
+                .resource(AuditResource::IdpDomain {
+                    domain_id: domain_row_id,
+                })
+                .metadata(AuditPayload::new(metadata))
+                .build(),
+        ))
+        .await;
+}
+
+/// Render the cached-success response: the row's persisted
+/// `verified_at` / `last_verified_via` win without re-mutating the DB
+/// or emitting a duplicate audit event — the first verify within the
+/// TTL window is the authoritative one.
+fn cached_verified_response(row: &OrgIdpDomain, resolver_path: String) -> Response {
+    let body = VerifyDomainResponse {
+        id: row.id,
+        domain: row.domain.clone(),
+        last_verified_via: row.last_verified_via.clone().unwrap_or(resolver_path),
+        verified_at: row.verified_at.unwrap_or_else(chrono::Utc::now),
+    };
+    (StatusCode::OK, Json(body)).into_response()
+}
+
+/// Canonical `IdpDomainFailed` payload shape — single source of truth
+/// for the resolver-failure and empty-token branches.
+fn failed_payload(
     org_idp_id: Uuid,
     domain_lower: &str,
     resolver_path: &str,
     reason_slug: &str,
-) {
-    auditor
-        .record(AuditEvent::V1(AuditEventV1::new(
-            AuditEventKind::IdpDomainFailed,
-            actor_from(auth),
-            AuditResource::IdpDomain {
-                domain_id: domain_row_id,
-            },
-            auth.correlation_id(),
-            org_id,
-            AuditPayload::new(serde_json::json!({
-                "org_idp_id": org_idp_id,
-                "domain_lower": domain_lower,
-                "resolver_path": resolver_path,
-                "reason": reason_slug,
-            })),
-        )))
-        .await;
+) -> serde_json::Value {
+    serde_json::json!({
+        "org_idp_id": org_idp_id,
+        "domain_lower": domain_lower,
+        "resolver_path": resolver_path,
+        "reason": reason_slug,
+    })
 }
 
 /// Axum handler for `DELETE .../domains/{domain_id}`.
@@ -333,20 +343,18 @@ pub async fn delete_domain(
         return Err(IdentityError::OrgNotFound);
     };
 
-    state
-        .auditor
-        .record(AuditEvent::V1(AuditEventV1::new(
-            AuditEventKind::IdpDomainDeleted,
-            actor_from(&auth),
-            AuditResource::IdpDomain { domain_id },
-            auth.correlation_id(),
-            org_id,
-            AuditPayload::new(serde_json::json!({
-                "org_idp_id": org_idp_id,
-                "domain_lower": domain_lower,
-            })),
-        )))
-        .await;
+    emit_domain_audit(
+        state.auditor.as_ref(),
+        &auth,
+        AuditEventKind::IdpDomainDeleted,
+        org_id,
+        domain_id,
+        serde_json::json!({
+            "org_idp_id": org_idp_id,
+            "domain_lower": domain_lower,
+        }),
+    )
+    .await;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

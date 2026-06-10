@@ -109,21 +109,24 @@ impl ServiceTokenService {
             .await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::ServiceTokenCreated,
-                AuditActor::User {
-                    user_id: actor_user_id,
-                    ip: None,
-                },
-                AuditResource::ServiceToken { token_id: id },
-                correlation_id,
-                actor_org_id,
-                AuditPayload::new(serde_json::json!({
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::ServiceTokenCreated,
+                    AuditActor::User {
+                        user_id: actor_user_id,
+                        ip: None,
+                    },
+                    Some(actor_org_id),
+                    correlation_id,
+                )
+                .resource(AuditResource::ServiceToken { token_id: id })
+                .metadata(AuditPayload::new(serde_json::json!({
                     "service_name": req.service_name,
                     "allowed_subjects": req.allowed_subjects,
                     "display_name": display_name,
-                })),
-            )))
+                })))
+                .build(),
+            ))
             .await;
 
         Ok(IssuedServiceToken {
@@ -187,19 +190,22 @@ impl ServiceTokenService {
         let _ = self.cache.evict_by_token_id(id).await;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::ServiceTokenRevoked,
-                AuditActor::User {
-                    user_id: actor_user_id,
-                    ip: None,
-                },
-                AuditResource::ServiceToken { token_id: id },
-                correlation_id,
-                actor_org_id,
-                AuditPayload::new(serde_json::json!({
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::ServiceTokenRevoked,
+                    AuditActor::User {
+                        user_id: actor_user_id,
+                        ip: None,
+                    },
+                    Some(actor_org_id),
+                    correlation_id,
+                )
+                .resource(AuditResource::ServiceToken { token_id: id })
+                .metadata(AuditPayload::new(serde_json::json!({
                     "service_name": target.service_name,
-                })),
-            )))
+                })))
+                .build(),
+            ))
             .await;
         Ok(())
     }

@@ -113,54 +113,28 @@ async fn callback_handler(
     let client_ip = extension_ip.map(|Extension(ClientIp(ip))| ip);
     let correlation_id = Uuid::now_v7();
 
-    // Step 1: resolve org_slug -> org. Failure here cannot be audited
-    // through `OidcService` because the service expects an `org_id`;
-    // we still need to emit a failure event so the audit envelope
-    // covers org-enumeration probes. Use a nil org_id placeholder; the
+    // Step 1: resolve org_slug -> org. Failure here precedes org
+    // resolution, so the failure event carries `org_id = None` — the
+    // audit envelope still covers org-enumeration probes and the
     // sub_reason payload distinguishes.
     let org = match state.org_repo.find_by_slug(&org_slug).await {
         Ok(Some(o)) => o,
         Ok(None) => {
             let err = IdentityError::OrgNotFound;
-            let stub = CallbackInput {
-                expected_org_id: Uuid::nil(),
-                expected_org_slug: Some(&org_slug),
-                code: "",
-                state: "",
-                iss_query: query.iss.as_deref(),
-                cookie_value: cookie_value.as_deref(),
-                correlation_id,
-                client_ip,
-            };
-            state.service.audit_handler_failure(stub, &err).await;
+            state
+                .service
+                .audit_handler_failure(None, correlation_id, client_ip, &err)
+                .await;
             return failure_response(err);
         }
         Err(err) => {
             tracing::warn!(target: "zagrosi.identity.oidc", error = %err, "org_repo lookup failed");
-            let stub = CallbackInput {
-                expected_org_id: Uuid::nil(),
-                expected_org_slug: Some(&org_slug),
-                code: "",
-                state: "",
-                iss_query: query.iss.as_deref(),
-                cookie_value: cookie_value.as_deref(),
-                correlation_id,
-                client_ip,
-            };
-            state.service.audit_handler_failure(stub, &err).await;
+            state
+                .service
+                .audit_handler_failure(None, correlation_id, client_ip, &err)
+                .await;
             return failure_response(err);
         }
-    };
-
-    let stub_input = CallbackInput {
-        expected_org_id: org.id,
-        expected_org_slug: Some(&org_slug),
-        code: "",
-        state: "",
-        iss_query: query.iss.as_deref(),
-        cookie_value: cookie_value.as_deref(),
-        correlation_id,
-        client_ip,
     };
 
     // Step 2: IdP-emitted error short-circuit.
@@ -180,7 +154,10 @@ async fn callback_handler(
             );
         }
         let err = IdentityError::OidcDiscoveryFailed("idp returned error");
-        state.service.audit_handler_failure(stub_input, &err).await;
+        state
+            .service
+            .audit_handler_failure(Some(org.id), correlation_id, client_ip, &err)
+            .await;
         return failure_response(err);
     }
 
@@ -189,7 +166,10 @@ async fn callback_handler(
     let state_param = query.state.as_deref().unwrap_or("");
     if code.is_empty() || state_param.is_empty() {
         let err = IdentityError::OidcStateMismatch;
-        state.service.audit_handler_failure(stub_input, &err).await;
+        state
+            .service
+            .audit_handler_failure(Some(org.id), correlation_id, client_ip, &err)
+            .await;
         return failure_response(err);
     }
 

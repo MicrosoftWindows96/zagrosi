@@ -115,21 +115,24 @@ impl ApiTokenService {
             .await?;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::ApiTokenCreated,
-                AuditActor::User {
-                    user_id: input.caller_user_id,
-                    ip: None,
-                },
-                AuditResource::ApiToken { token_id: id },
-                input.correlation_id,
-                input.caller_org_id,
-                AuditPayload::new(serde_json::json!({
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::ApiTokenCreated,
+                    AuditActor::User {
+                        user_id: input.caller_user_id,
+                        ip: None,
+                    },
+                    Some(input.caller_org_id),
+                    input.correlation_id,
+                )
+                .resource(AuditResource::ApiToken { token_id: id })
+                .metadata(AuditPayload::new(serde_json::json!({
                     "display_name": display_name,
                     "scopes": req.scopes,
                     "expires_at": req.expires_at,
-                })),
-            )))
+                })))
+                .build(),
+            ))
             .await;
 
         Ok(IssuedApiToken {
@@ -221,19 +224,22 @@ impl ApiTokenService {
         let _ = self.cache.evict_by_token_id(token_id).await;
 
         self.auditor
-            .record(AuditEvent::V1(AuditEventV1::new(
-                AuditEventKind::ApiTokenRevoked,
-                AuditActor::User {
-                    user_id: caller_user_id,
-                    ip: None,
-                },
-                AuditResource::ApiToken { token_id },
-                correlation_id,
-                caller_org_id,
-                AuditPayload::new(serde_json::json!({
+            .record(AuditEvent::V1(
+                AuditEventV1::builder(
+                    AuditEventKind::ApiTokenRevoked,
+                    AuditActor::User {
+                        user_id: caller_user_id,
+                        ip: None,
+                    },
+                    Some(caller_org_id),
+                    correlation_id,
+                )
+                .resource(AuditResource::ApiToken { token_id })
+                .metadata(AuditPayload::new(serde_json::json!({
                     "owner_user_id": target.user_id,
-                })),
-            )))
+                })))
+                .build(),
+            ))
             .await;
 
         Ok(())

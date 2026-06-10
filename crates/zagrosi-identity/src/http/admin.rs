@@ -53,21 +53,25 @@ pub async fn unlock_user(
     state
         .service
         .auditor
-        .record(AuditEvent::V1(AuditEventV1::new(
-            AuditEventKind::AccountUnlocked,
-            // Until a dedicated admin console wires authenticated
-            // actors, the actor is the server itself. The mounter
-            // is expected to attribute the human-driven action via
-            // its own audit row.
-            AuditActor::System,
-            AuditResource::User { user_id },
-            Uuid::now_v7(),
-            Uuid::nil(),
-            AuditPayload::new(serde_json::json!({
+        .record(AuditEvent::V1(
+            AuditEventV1::builder(
+                AuditEventKind::AccountUnlocked,
+                // Until a dedicated admin console wires authenticated
+                // actors, the actor is the server itself. The mounter
+                // is expected to attribute the human-driven action via
+                // its own audit row. The admin port has no org — this
+                // is the canonical org-less audit event.
+                AuditActor::System,
+                None,
+                Uuid::now_v7(),
+            )
+            .resource(AuditResource::User { user_id })
+            .metadata(AuditPayload::new(serde_json::json!({
                 "scope": SIGNIN_SCOPE,
                 "user_id": user_id,
-            })),
-        )))
+            })))
+            .build(),
+        ))
         .await;
 
     Ok(StatusCode::NO_CONTENT)

@@ -632,32 +632,43 @@ impl OidcService {
         session_id: Uuid,
         org_idp_id: Uuid,
     ) {
-        let event = AuditEvent::V1(AuditEventV1::new(
-            AuditEventKind::SigninSuccess,
-            AuditActor::User {
-                user_id,
-                ip: input.client_ip,
-            },
-            AuditResource::Session { session_id },
-            input.correlation_id,
-            input.expected_org_id,
-            AuditPayload::new(serde_json::json!({
+        let event = AuditEvent::V1(
+            AuditEventV1::builder(
+                AuditEventKind::SigninSuccess,
+                AuditActor::User {
+                    user_id,
+                    ip: input.client_ip,
+                },
+                Some(input.expected_org_id),
+                input.correlation_id,
+            )
+            .resource(AuditResource::Session { session_id })
+            .metadata(AuditPayload::new(serde_json::json!({
                 "auth_method": "oidc",
                 "user_id": user_id,
                 "org_idp_id": org_idp_id,
-            })),
-        ));
+            })))
+            .build(),
+        );
         self.auditor.record(event).await;
     }
 
     /// Emit a failure audit event from outside `callback_inner` (HTTP
     /// handler short-circuits: org-not-found, IdP-error redirect,
-    /// missing-code/state). The handler does not own the
-    /// `Auditor` directly; this surface routes through the service so
-    /// the SIEM sees one event-per-failure regardless of where the
-    /// short-circuit fired.
-    pub async fn audit_handler_failure(&self, input: CallbackInput<'_>, err: &IdentityError) {
-        self.audit_failure(input, err).await;
+    /// missing-code/state). `org_id` is `None` when the failure precedes
+    /// org-slug resolution — org-enumeration probes have no org. The
+    /// handler does not own the `Auditor` directly; this surface routes
+    /// through the service so the SIEM sees one event-per-failure
+    /// regardless of where the short-circuit fired.
+    pub async fn audit_handler_failure(
+        &self,
+        org_id: Option<Uuid>,
+        correlation_id: Uuid,
+        client_ip: Option<IpAddr>,
+        err: &IdentityError,
+    ) {
+        self.emit_failure_event(org_id, correlation_id, client_ip, err)
+            .await;
     }
 
     /// Emit a single failure audit event for an error that propagated
@@ -665,21 +676,39 @@ impl OidcService {
     /// owns the auditor I/O — the previous spawn-and-forget pattern
     /// dropped events on shutdown and was unbounded under load.
     async fn audit_failure(&self, input: CallbackInput<'_>, err: &IdentityError) {
+        self.emit_failure_event(
+            Some(input.expected_org_id),
+            input.correlation_id,
+            input.client_ip,
+            err,
+        )
+        .await;
+    }
+
+    /// Shared failure-event body for [`Self::audit_handler_failure`] and
+    /// [`Self::audit_failure`].
+    async fn emit_failure_event(
+        &self,
+        org_id: Option<Uuid>,
+        correlation_id: Uuid,
+        client_ip: Option<IpAddr>,
+        err: &IdentityError,
+    ) {
         let kind = err.audit_kind_for_state_family();
         let sub_reason = err.audit_sub_reason();
-        let event = AuditEvent::V1(AuditEventV1::new(
-            kind,
-            AuditActor::Anonymous {
-                ip: input.client_ip,
-            },
-            AuditResource::None,
-            input.correlation_id,
-            input.expected_org_id,
-            AuditPayload::new(serde_json::json!({
+        let event = AuditEvent::V1(
+            AuditEventV1::builder(
+                kind,
+                AuditActor::Anonymous { ip: client_ip },
+                org_id,
+                correlation_id,
+            )
+            .metadata(AuditPayload::new(serde_json::json!({
                 "sub_reason": sub_reason,
                 "auth_method": "oidc",
-            })),
-        ));
+            })))
+            .build(),
+        );
         self.auditor.record(event).await;
     }
 

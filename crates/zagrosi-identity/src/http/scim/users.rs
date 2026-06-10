@@ -748,13 +748,16 @@ pub(crate) async fn record_audit(
     let Ok(service_name) = ServiceName::parse("scim-server") else {
         return;
     };
-    let event = AuditEventV1::new(
+    let event = AuditEventV1::builder(
         kind,
         AuditActor::Service { service_name },
-        AuditResource::User { user_id },
+        Some(org_id),
         Uuid::now_v7(),
-        org_id,
-        AuditPayload::new(json!({"scim_token_id": token_id.to_string()})),
-    );
+    )
+    .resource(AuditResource::User { user_id })
+    .metadata(AuditPayload::new(
+        json!({"scim_token_id": token_id.to_string()}),
+    ))
+    .build();
     auditor.record(AuditEvent::V1(event)).await;
 }

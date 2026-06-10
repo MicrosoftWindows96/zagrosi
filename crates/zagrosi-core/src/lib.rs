@@ -12,7 +12,7 @@
 //!   OpenTelemetry, and a Prometheus admin server; see [`observability`].
 //! - Cross-crate ports + value objects consumed by `zagrosi-identity` and
 //!   the future `zagrosi-rbac` / `zagrosi-audit` crates: [`auth_context`],
-//!   [`audit`], [`email_transport`], [`breach_list_client`],
+//!   [`audit`], [`permission`], [`email_transport`], [`breach_list_client`],
 //!   [`key_provider`], [`rate_limiter`], [`mfa_policy`],
 //!   [`session_introspector`].
 //!
@@ -30,12 +30,13 @@ pub mod error;
 pub mod key_provider;
 pub mod mfa_policy;
 pub mod observability;
+pub mod permission;
 pub mod rate_limiter;
 pub mod session_introspector;
 
 pub use audit::{
-    AuditActor, AuditEvent, AuditEventError, AuditEventKind, AuditEventV1, AuditPayload,
-    AuditResource, Auditor, NoopAuditor, ServiceName, ServiceNameError,
+    AuditActor, AuditEvent, AuditEventError, AuditEventKind, AuditEventV1, AuditEventV1Builder,
+    AuditPayload, AuditResource, Auditor, NoopAuditor, ServiceName, ServiceNameError,
 };
 pub use auth_context::{
     AuthContext, AuthContextError, AuthError, AuthMethod, IdentityContext, RawTokenStr, TokenClass,
@@ -50,5 +51,9 @@ pub use error::{Result, ZagrosiError};
 pub use key_provider::{KeyHandle, KeyProvider, KeyProviderError, Signature, SignatureAlgorithm};
 pub use mfa_policy::{AlwaysAllowMfaPolicy, AuthContinuation, Factor, MfaPolicy, Required};
 pub use observability::Observability;
+pub use permission::{
+    AllowAllChecker, Capability, CapabilityParseError, Decision, DenyAllChecker, DenyReason,
+    PermissionChecker, ScopePath, ScopePathError, ScopeRef,
+};
 pub use rate_limiter::{RateLimitDecision, RateLimitKey, RateLimiter, RateLimiterError};
 pub use session_introspector::SessionIntrospector;
