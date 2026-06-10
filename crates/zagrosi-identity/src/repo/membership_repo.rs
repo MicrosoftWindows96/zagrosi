@@ -29,7 +29,13 @@ impl MembershipRepo {
     /// Insert a new membership. Hits the partial unique on
     /// `(user_id, org_id) WHERE deleted_at IS NULL` if the user is
     /// already a live member of the org.
+    ///
+    /// Runs in a short self-managed transaction with the `app.org_id`
+    /// GUC set to `new.org_id` so the P2 WITH CHECK admits the write
+    /// under RLS.
     pub async fn create(&self, new: NewMembership<'_>) -> Result<Membership> {
+        let mut tx = self.pool.begin().await?;
+        super::with_org_context(&mut tx, new.org_id).await?;
         let row = sqlx::query!(
             r#"
             INSERT INTO user_org_memberships (
@@ -47,7 +53,7 @@ impl MembershipRepo {
             new.joined_via,
             new.jit_provisioned_at,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -57,6 +63,7 @@ impl MembershipRepo {
                 Some("user_org_memberships_user_org_unique_live"),
             )
         })?;
+        tx.commit().await?;
 
         Ok(Membership {
             id: row.id,
@@ -194,22 +201,6 @@ impl MembershipRepo {
                 deleted_at: r.deleted_at,
             })
             .collect())
-    }
-
-    /// Soft-delete a single membership. Idempotent.
-    pub async fn delete(&self, user_id: Uuid, org_id: Uuid) -> Result<()> {
-        sqlx::query!(
-            r#"
-            UPDATE user_org_memberships
-            SET deleted_at = now()
-            WHERE user_id = $1 AND org_id = $2 AND deleted_at IS NULL
-            "#,
-            user_id,
-            org_id,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 }
 

@@ -87,11 +87,18 @@ impl ApiTokenRepo {
     }
 }
 
+impl super::org_scoped::HasPool for ApiTokenRepo {
+    fn pool(&self) -> &sqlx::PgPool {
+        &self.pool
+    }
+}
+
 impl OrgScoped<'_, ApiTokenRepo> {
     /// Insert a new PAT bound to this wrapper's org. `token_hash`
     /// MUST be the SHA-256 over the full raw `pat_<43>` token.
     pub async fn create(&self, new: NewApiToken<'_>) -> Result<ApiToken> {
         let scopes_owned: Vec<String> = new.scopes.iter().map(|s| (*s).to_string()).collect();
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             INSERT INTO api_tokens (
@@ -111,7 +118,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
             &scopes_owned,
             new.expires_at,
         )
-        .fetch_one(self.inner().pool())
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -121,6 +128,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
                 Some("api_tokens_token_hash_unique_live"),
             )
         })?;
+        tx.commit().await?;
 
         let token_hash: [u8; 32] = row
             .token_hash
@@ -144,6 +152,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
 
     /// Lookup a live PAT by token hash, scoped to this org.
     pub async fn find_by_token_hash(&self, token_hash: &[u8; 32]) -> Result<Option<ApiToken>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT id, token_hash, user_id, org_id, display_name,
@@ -158,8 +167,9 @@ impl OrgScoped<'_, ApiTokenRepo> {
             self.org_id(),
             &token_hash[..],
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         let Some(r) = row else { return Ok(None) };
         let token_hash_arr: [u8; 32] = r
@@ -191,6 +201,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
         user_id: Uuid,
         token_id: Uuid,
     ) -> Result<Option<ApiToken>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT id, token_hash, user_id, org_id, display_name,
@@ -203,8 +214,9 @@ impl OrgScoped<'_, ApiTokenRepo> {
             user_id,
             token_id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         let Some(r) = row else { return Ok(None) };
         let token_hash: [u8; 32] = r
@@ -230,6 +242,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
     /// List live PATs for `user_id` in this org. Best-effort
     /// observability ordering.
     pub async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<ApiToken>> {
+        let mut tx = self.begin_org_tx().await?;
         let rows = sqlx::query!(
             r#"
             SELECT id, token_hash, user_id, org_id, display_name,
@@ -244,8 +257,9 @@ impl OrgScoped<'_, ApiTokenRepo> {
             self.org_id(),
             user_id,
         )
-        .fetch_all(self.inner().pool())
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         rows.into_iter()
             .map(|r| {
@@ -286,6 +300,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
         last_used_ip: Option<IpAddr>,
     ) -> Result<()> {
         let ip_value: Option<sqlx::types::ipnetwork::IpNetwork> = last_used_ip.map(Into::into);
+        let mut tx = self.begin_org_tx().await?;
         sqlx::query!(
             r#"
             UPDATE api_tokens
@@ -302,8 +317,9 @@ impl OrgScoped<'_, ApiTokenRepo> {
             last_used_at,
             ip_value,
         )
-        .execute(self.inner().pool())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -313,6 +329,7 @@ impl OrgScoped<'_, ApiTokenRepo> {
     /// missing" (`0`) and emit audit events only for the former,
     /// preventing duplicate audit emission under concurrent revokes.
     pub async fn revoke(&self, token_id: Uuid) -> Result<u64> {
+        let mut tx = self.begin_org_tx().await?;
         let result = sqlx::query!(
             r#"
             UPDATE api_tokens
@@ -322,14 +339,16 @@ impl OrgScoped<'_, ApiTokenRepo> {
             self.org_id(),
             token_id,
         )
-        .execute(self.inner().pool())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(result.rows_affected())
     }
 
     /// Revoke every live PAT for `user_id` in this org. Used by the
     /// user soft-delete cascade.
     pub async fn revoke_all_for_user(&self, user_id: Uuid) -> Result<u64> {
+        let mut tx = self.begin_org_tx().await?;
         let result = sqlx::query!(
             r#"
             UPDATE api_tokens
@@ -339,8 +358,9 @@ impl OrgScoped<'_, ApiTokenRepo> {
             self.org_id(),
             user_id,
         )
-        .execute(self.inner().pool())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(result.rows_affected())
     }
 }

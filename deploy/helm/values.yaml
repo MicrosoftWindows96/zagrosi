@@ -34,6 +34,28 @@ postgres:
     tag: ""  # pin to deploy/docker/postgres/IMAGE_TAG value at deploy time
 valkey:
   enabled: false
+
+# Four-role Postgres DSNs (RLS split). Each entry names a Kubernetes
+# Secret + key holding the full DSN for that role; future app/gateway/
+# worker templates will surface them as ZAGROSI_DATABASE_URL (zagrosi_app),
+# ZAGROSI_DATABASE_MIGRATE_URL, ZAGROSI_DATABASE_AUTH_URL, and
+# ZAGROSI_DATABASE_MAINTENANCE_URL. Managed-Postgres users must bootstrap
+# the four roles as their admin/superuser first — see "Managed Postgres
+# requirements" in deploy/docker/postgres/README.md (BYPASSRLS cannot be
+# granted by a non-superuser).
+database:
+  appDsnSecret:
+    name: ""
+    key: dsn
+  migrateDsnSecret:
+    name: ""
+    key: dsn
+  authDsnSecret:
+    name: ""
+    key: dsn
+  maintenanceDsnSecret:
+    name: ""
+    key: dsn
 nats:
   enabled: false
 

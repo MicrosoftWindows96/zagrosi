@@ -37,6 +37,9 @@ use crate::error::Result;
 /// this helper is a no-op for that table; once the tenant-isolation layer introduces
 /// per-tenant service tokens the predicate will land here.
 pub async fn soft_delete_org(tx: &mut sqlx::Transaction<'_, Postgres>, org_id: Uuid) -> Result<()> {
+    // RLS: the cascade UPDATEs touch tenanted tables; establish org
+    // context on this transaction (idempotent with a caller-set GUC).
+    super::with_org_context(tx, org_id).await?;
     sqlx::query!(
         r#"UPDATE orgs SET deleted_at = now(), updated_at = now()
            WHERE id = $1 AND deleted_at IS NULL"#,

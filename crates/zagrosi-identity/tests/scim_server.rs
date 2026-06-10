@@ -104,7 +104,9 @@ async fn build_harness_with_cidrs(allowed_cidrs: Vec<IpNetwork>) -> TestResult<H
     let state = ScimState::new(
         pool.clone(),
         users,
-        scim_tokens,
+        // Bearer-hash auth lookups ride the AUTH pool (section-05
+        // mechanism), exactly as the composition root wires production.
+        ScimResourceRepo::new(env.db.auth_pool().clone()),
         groups,
         memberships,
         sessions,

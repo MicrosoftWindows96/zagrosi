@@ -78,7 +78,11 @@ pub struct ScimState {
     /// User repo (single-tenant — SCIM Users surface scopes through
     /// `MembershipRepo` to enforce tenancy).
     pub users: UserRepo,
-    /// SCIM bearer-token repo for the auth middleware.
+    /// SCIM bearer-token repo for the auth middleware. Pre-tenant-
+    /// context hash lookup: the composition root wires this repo over
+    /// the AUTH pool (`zagrosi_auth` carries a `USING (true)` SELECT
+    /// policy on `scim_tokens`); the app role without a GUC sees zero
+    /// rows by design.
     pub scim_tokens: ScimResourceRepo,
     /// Group repo (multi-tenant via `OrgScoped`).
     pub groups: GroupRepo,

@@ -324,7 +324,7 @@ async fn refresh_replay_emits_audit_event() -> TestResult {
 async fn jit_default_requires_email_verified() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "jit-rev-org").await?;
-    let idp_id = seed_idp(&env.pool, org_id).await?;
+    let idp_id = seed_idp(env.db.migrate_pool(), org_id).await?;
     let jit = JitProvisioner::new(
         UserRepo::new(env.pool.clone()),
         FederatedIdentityRepo::new(env.pool.clone()),
@@ -332,6 +332,7 @@ async fn jit_default_requires_email_verified() -> TestResult {
     );
 
     let mut tx = env.pool.begin().await?;
+    zagrosi_identity::repo::with_org_context(&mut tx, org_id).await?;
     let result = jit
         .run(
             &mut tx,
@@ -367,7 +368,7 @@ async fn jit_default_requires_email_verified() -> TestResult {
 async fn jit_override_allows_unverified() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "jit-ovr-org").await?;
-    let idp_id = seed_idp(&env.pool, org_id).await?;
+    let idp_id = seed_idp(env.db.migrate_pool(), org_id).await?;
     let jit = JitProvisioner::new(
         UserRepo::new(env.pool.clone()),
         FederatedIdentityRepo::new(env.pool.clone()),
@@ -375,6 +376,7 @@ async fn jit_override_allows_unverified() -> TestResult {
     );
 
     let mut tx = env.pool.begin().await?;
+    zagrosi_identity::repo::with_org_context(&mut tx, org_id).await?;
     let outcome = jit
         .run(
             &mut tx,
@@ -408,7 +410,7 @@ async fn jit_override_allows_unverified() -> TestResult {
 async fn jit_collision_rejects_no_auto_merge() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "jit-col-org").await?;
-    let idp_id = seed_idp(&env.pool, org_id).await?;
+    let idp_id = seed_idp(env.db.migrate_pool(), org_id).await?;
     seed_user(&env.pool, "collide@example.com").await?;
 
     let jit = JitProvisioner::new(
@@ -418,6 +420,7 @@ async fn jit_collision_rejects_no_auto_merge() -> TestResult {
     );
 
     let mut tx = env.pool.begin().await?;
+    zagrosi_identity::repo::with_org_context(&mut tx, org_id).await?;
     let result = jit
         .run(
             &mut tx,
@@ -453,7 +456,7 @@ async fn jit_collision_rejects_no_auto_merge() -> TestResult {
 async fn jit_happy_path_atomic_inserts() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "jit-hpy-org").await?;
-    let idp_id = seed_idp(&env.pool, org_id).await?;
+    let idp_id = seed_idp(env.db.migrate_pool(), org_id).await?;
     let jit = JitProvisioner::new(
         UserRepo::new(env.pool.clone()),
         FederatedIdentityRepo::new(env.pool.clone()),
@@ -461,6 +464,7 @@ async fn jit_happy_path_atomic_inserts() -> TestResult {
     );
 
     let mut tx = env.pool.begin().await?;
+    zagrosi_identity::repo::with_org_context(&mut tx, org_id).await?;
     let outcome = jit
         .run(
             &mut tx,
@@ -509,7 +513,7 @@ async fn jit_happy_path_atomic_inserts() -> TestResult {
     )
     .bind(outcome.user.id)
     .bind(org_id)
-    .fetch_one(&env.pool)
+    .fetch_one(env.db.migrate_pool())
     .await?;
     assert_eq!(mem_count, 1);
     Ok(())
@@ -550,7 +554,7 @@ async fn callback_atomic_tx_rollback_on_session_insert_failure() -> TestResult {
     let env = migrated_env().await?;
     let pool = env.pool.clone();
     let org_id = seed_org(&pool, &format!("atom-{}", Uuid::now_v7())).await?;
-    let idp_id = seed_idp(&pool, org_id).await?;
+    let idp_id = seed_idp(env.db.migrate_pool(), org_id).await?;
 
     // Seed a pre-existing user holding a live session whose
     // `token_hash` we pin. The partial unique
@@ -608,6 +612,7 @@ async fn callback_atomic_tx_rollback_on_session_insert_failure() -> TestResult {
     // tx. We mirror with an explicit rollback after the deliberate
     // failure for clarity.
     let mut tx = pool.begin().await?;
+    zagrosi_identity::repo::with_org_context(&mut tx, org_id).await?;
 
     // Use a single per-test email so the JIT path's collision check
     // does not race the seed user above.

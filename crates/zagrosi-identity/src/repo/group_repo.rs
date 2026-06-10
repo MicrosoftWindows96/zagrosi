@@ -65,6 +65,12 @@ impl GroupRepo {
     }
 }
 
+impl super::org_scoped::HasPool for GroupRepo {
+    fn pool(&self) -> &sqlx::PgPool {
+        &self.pool
+    }
+}
+
 /// Argument bundle for [`OrgScoped::<GroupRepo>::create`].
 #[derive(Debug, Clone, Copy)]
 pub struct NewGroup<'a> {
@@ -79,7 +85,10 @@ pub struct NewGroup<'a> {
 impl OrgScoped<'_, GroupRepo> {
     /// Insert a new group within this org.
     pub async fn create_group(&self, new: NewGroup<'_>) -> Result<Group> {
-        self.create_group_in_pool(new, self.inner().pool()).await
+        let mut tx = self.begin_org_tx().await?;
+        let group = self.create_group_in_tx(&mut tx, new).await?;
+        tx.commit().await?;
+        Ok(group)
     }
 
     /// Insert a new group within a caller-supplied transaction.
@@ -122,45 +131,11 @@ impl OrgScoped<'_, GroupRepo> {
         })
     }
 
-    async fn create_group_in_pool(&self, new: NewGroup<'_>, pool: &PgPool) -> Result<Group> {
-        let row = sqlx::query!(
-            r#"
-            INSERT INTO groups (id, org_id, display_name, external_id)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, org_id, display_name, external_id, row_version,
-                      created_at, updated_at, deleted_at
-            "#,
-            new.id,
-            self.org_id(),
-            new.display_name,
-            new.external_id,
-        )
-        .fetch_one(pool)
-        .await
-        .map_err(|e| {
-            map_sqlx_error(
-                e,
-                IdentityError::GroupNotFound,
-                IdentityError::GroupDisplayNameExists,
-                Some("groups_org_display_name_unique_live"),
-            )
-        })?;
-        Ok(Group {
-            id: row.id,
-            org_id: row.org_id,
-            display_name: row.display_name,
-            external_id: row.external_id,
-            row_version: row.row_version,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-        })
-    }
-
     /// Lookup a live group by id, scoped to this org. Cross-org IDs
     /// resolve to `None` so the SCIM handler can return `404` without
     /// the response status leaking existence.
     pub async fn find_group(&self, id: Uuid) -> Result<Option<Group>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT id, org_id, display_name, external_id, row_version,
@@ -171,8 +146,9 @@ impl OrgScoped<'_, GroupRepo> {
             self.org_id(),
             id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(row.map(|r| Group {
             id: r.id,
             org_id: r.org_id,
@@ -347,6 +323,7 @@ impl OrgScoped<'_, GroupRepo> {
     /// List live group memberships for `group_id` against the pool
     /// (read-only path used by GET handler).
     pub async fn list_members(&self, group_id: Uuid) -> Result<Vec<GroupMembership>> {
+        let mut tx = self.begin_org_tx().await?;
         let rows = sqlx::query!(
             r#"
             SELECT m.id, m.group_id, m.user_id, m.created_at, m.deleted_at
@@ -360,8 +337,9 @@ impl OrgScoped<'_, GroupRepo> {
             self.org_id(),
             group_id,
         )
-        .fetch_all(self.inner().pool())
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(rows
             .into_iter()
             .map(|r| GroupMembership {
@@ -385,8 +363,8 @@ impl OrgScoped<'_, GroupRepo> {
     ) -> Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO group_memberships (id, group_id, user_id)
-            VALUES ($1, $2, $3)
+            INSERT INTO group_memberships (id, group_id, user_id, org_id)
+            VALUES ($1, $2, $3, $4)
             ON CONFLICT (group_id, user_id)
                 WHERE deleted_at IS NULL
                 DO NOTHING
@@ -394,6 +372,7 @@ impl OrgScoped<'_, GroupRepo> {
             Uuid::now_v7(),
             group_id,
             user_id,
+            self.org_id(),
         )
         .execute(&mut **tx)
         .await?;
@@ -450,6 +429,7 @@ impl OrgScoped<'_, GroupRepo> {
 
     /// Count live groups in this org (used by list-response totals).
     pub async fn count_groups(&self) -> Result<i64> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT COUNT(*) AS "count!"
@@ -458,14 +438,16 @@ impl OrgScoped<'_, GroupRepo> {
             "#,
             self.org_id(),
         )
-        .fetch_one(self.inner().pool())
+        .fetch_one(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(row.count)
     }
 
     /// List a page of groups in this org (no filter — caller layers
     /// filter predicates separately via `QueryBuilder`).
     pub async fn list_groups_page(&self, offset: i64, limit: i64) -> Result<Vec<Group>> {
+        let mut tx = self.begin_org_tx().await?;
         let rows = sqlx::query!(
             r#"
             SELECT id, org_id, display_name, external_id, row_version,
@@ -479,8 +461,9 @@ impl OrgScoped<'_, GroupRepo> {
             offset,
             limit,
         )
-        .fetch_all(self.inner().pool())
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(rows
             .into_iter()
             .map(|r| Group {

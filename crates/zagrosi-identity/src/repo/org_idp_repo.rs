@@ -35,9 +35,16 @@ impl OrgIdpRepo {
     }
 }
 
+impl super::org_scoped::HasPool for OrgIdpRepo {
+    fn pool(&self) -> &sqlx::PgPool {
+        &self.pool
+    }
+}
+
 impl OrgScoped<'_, OrgIdpRepo> {
     /// Insert a new IdP for this org.
     pub async fn create(&self, new: NewOrgIdp<'_>) -> Result<OrgIdp> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             INSERT INTO org_idps (
@@ -60,7 +67,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
             new.is_default,
             new.enabled,
         )
-        .fetch_one(self.inner().pool())
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -70,6 +77,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
                 None,
             )
         })?;
+        tx.commit().await?;
 
         Ok(OrgIdp {
             id: row.id,
@@ -89,6 +97,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
 
     /// Find a live IdP by id, scoped to this org.
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<OrgIdp>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT id, org_id, protocol, display_name, config,
@@ -100,8 +109,9 @@ impl OrgScoped<'_, OrgIdpRepo> {
             self.org_id(),
             id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(row.map(|r| OrgIdp {
             id: r.id,
@@ -122,6 +132,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
     /// List live IdPs for this org. Ordered by `display_name` for UI
     /// stability.
     pub async fn list_for_org(&self) -> Result<Vec<OrgIdp>> {
+        let mut tx = self.begin_org_tx().await?;
         let rows = sqlx::query!(
             r#"
             SELECT id, org_id, protocol, display_name, config,
@@ -133,8 +144,9 @@ impl OrgScoped<'_, OrgIdpRepo> {
             "#,
             self.org_id(),
         )
-        .fetch_all(self.inner().pool())
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(rows
             .into_iter()
@@ -179,6 +191,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
         expected_version: i16,
     ) -> Result<i16> {
         // 1. Try CAS update.
+        let mut tx = self.begin_org_tx().await?;
         let updated = sqlx::query!(
             r#"
             UPDATE org_idps
@@ -196,10 +209,11 @@ impl OrgScoped<'_, OrgIdpRepo> {
             config,
             expected_version,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
 
         if let Some(row) = updated {
+            tx.commit().await?;
             return Ok(row.config_version);
         }
 
@@ -214,9 +228,10 @@ impl OrgScoped<'_, OrgIdpRepo> {
             self.org_id(),
             id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?
         .is_some();
+        tx.commit().await?;
 
         if exists {
             Err(IdentityError::OptimisticLockConflict)
@@ -229,6 +244,7 @@ impl OrgScoped<'_, OrgIdpRepo> {
     /// of the org; callers outside the cascade should generally
     /// prefer the cascade helper.
     pub async fn soft_delete(&self, id: Uuid) -> Result<()> {
+        let mut tx = self.begin_org_tx().await?;
         sqlx::query!(
             r#"
             UPDATE org_idps
@@ -238,8 +254,9 @@ impl OrgScoped<'_, OrgIdpRepo> {
             self.org_id(),
             id,
         )
-        .execute(self.inner().pool())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

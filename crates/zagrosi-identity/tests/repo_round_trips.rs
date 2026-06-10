@@ -215,7 +215,7 @@ async fn federated_identity_round_trip() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp_id)
         .bind(org_id)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let fed = FederatedIdentityRepo::new(env.pool.clone());
@@ -249,7 +249,7 @@ async fn oidc_pending_round_trip() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp_id)
         .bind(org_id)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let repo = OidcPendingRepo::new(env.pool.clone());
@@ -341,7 +341,7 @@ async fn saml_replay_round_trip() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'saml', 'd', '{}'::jsonb)")
         .bind(idp_id)
         .bind(org_id)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let repo = SamlReplayRepo::new(env.pool.clone());

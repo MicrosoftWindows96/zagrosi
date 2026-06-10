@@ -30,7 +30,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use chrono::{TimeDelta, Utc};
-use common::{TestResult, migrated_env, seed_org, seed_user};
+use common::{TestEnv, TestResult, migrated_env, seed_org, seed_user};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use serial_test::serial;
@@ -75,8 +75,11 @@ fn build_service(repo: ApiTokenRepo, cache: ApiTokenCache) -> ApiTokenService {
     ApiTokenService::new(repo, cache, Arc::new(NoopAuditor))
 }
 
+/// Resolver repos ride the AUTH pool (pre-tenant-context hash lookups —
+/// the section-05 `zagrosi_auth` mechanism), exactly as the composition
+/// root wires production.
 fn build_resolver(
-    repo: ApiTokenRepo,
+    env: &TestEnv,
     cache: ApiTokenCache,
     rate_limiter: Arc<dyn RateLimiter>,
 ) -> (
@@ -84,6 +87,7 @@ fn build_resolver(
     zagrosi_identity::api_tokens::ApiTokenLastUsedReceiver,
 ) {
     let (sender, receiver) = api_token_last_used_channel(CHANNEL_CAPACITY);
+    let repo = ApiTokenRepo::new(env.db.auth_pool().clone());
     let resolver = ApiTokenResolver::new(repo, cache, sender, rate_limiter);
     (resolver, receiver)
 }
@@ -206,7 +210,8 @@ async fn issue_persists_hashed_token_and_returns_raw() -> TestResult {
 
     // Verify persisted hash matches SHA-256 of the raw token.
     let expected_hash = hash_token(&issued.raw_token);
-    let row = repo
+    // Hash lookups are the auth-path query: assert over the auth pool.
+    let row = ApiTokenRepo::new(env.db.auth_pool().clone())
         .find_live_by_token_hash(&expected_hash.0)
         .await?
         .expect("hash lookup must hit the freshly issued row");
@@ -466,7 +471,7 @@ async fn revoke_marks_revoked_at_and_subsequent_revoke_returns_404() -> TestResu
         "SELECT revoked_at FROM api_tokens WHERE id = $1",
         issued.token.id
     )
-    .fetch_one(&env.pool)
+    .fetch_one(env.db.migrate_pool())
     .await?;
     assert!(row.revoked_at.is_some());
     Ok(())
@@ -515,7 +520,7 @@ async fn resolver_round_trips_to_auth_context() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache, allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -554,7 +559,7 @@ async fn resolver_rejects_revoked_token() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache, allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -589,7 +594,6 @@ async fn resolver_rejects_expired_token() -> TestResult {
     let env = migrated_env().await?;
     let org = seed_org(&env.pool, "exp-rs").await?;
     let user = seed_user(&env.pool, "exp@example.com").await?;
-    let repo = ApiTokenRepo::new(env.pool.clone());
 
     // Insert directly so we can land an `expires_at` in the past
     // (the service-layer validator forbids past expiry).
@@ -605,10 +609,10 @@ async fn resolver_rejects_expired_token() -> TestResult {
         org,
         Utc::now() - TimeDelta::hours(1),
     )
-    .execute(&env.pool)
+    .execute(env.db.migrate_pool())
     .await?;
 
-    let (resolver, _rx) = build_resolver(repo, cache(), allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache(), allow_always());
     let err = resolver
         .resolve(&raw)
         .await
@@ -621,8 +625,7 @@ async fn resolver_rejects_expired_token() -> TestResult {
 #[serial]
 async fn resolver_rejects_malformed_prefix_without_db_touch() -> TestResult {
     let env = migrated_env().await?;
-    let repo = ApiTokenRepo::new(env.pool.clone());
-    let (resolver, _rx) = build_resolver(repo, cache(), allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache(), allow_always());
 
     let err = resolver
         .resolve("xxx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
@@ -647,7 +650,7 @@ async fn resolver_rejects_token_after_user_soft_delete_cascade() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache, allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -665,6 +668,9 @@ async fn resolver_rejects_token_after_user_soft_delete_cascade() -> TestResult {
     // Apply the user soft-delete cascade — the cascade revokes the
     // user's PATs in the same transaction.
     let mut tx = env.pool.begin().await?;
+    // The user cascade touches tenanted rows; as zagrosi_app it needs
+    // org context (cross-org purge is the maintenance role's job).
+    zagrosi_identity::repo::with_org_context(&mut tx, org).await?;
     soft_delete_user(&mut tx, user).await?;
     tx.commit().await?;
 
@@ -685,7 +691,7 @@ async fn resolver_rejects_token_after_org_soft_delete_cascade() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache, allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -725,7 +731,7 @@ async fn cache_hit_returns_same_auth_context_as_db_read() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache.clone(), allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache.clone(), allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -765,7 +771,7 @@ async fn revocation_evicts_cache_entry() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, _rx) = build_resolver(repo, cache.clone(), allow_always());
+    let (resolver, _rx) = build_resolver(&env, cache.clone(), allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -814,7 +820,7 @@ async fn write_behind_drain_persists_last_used_columns() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, mut rx) = build_resolver(repo.clone(), cache, allow_always());
+    let (resolver, mut rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -843,7 +849,7 @@ async fn write_behind_drain_persists_last_used_columns() -> TestResult {
         "SELECT last_used_at, last_used_ip FROM api_tokens WHERE id = $1",
         issued.token.id
     )
-    .fetch_one(&env.pool)
+    .fetch_one(env.db.migrate_pool())
     .await?;
     assert!(row.last_used_at.is_some());
     assert_eq!(row.last_used_ip.map(|n| n.ip()), Some(ip));
@@ -859,7 +865,7 @@ async fn write_behind_coalesces_repeats_within_window() -> TestResult {
     let repo = ApiTokenRepo::new(env.pool.clone());
     let cache = cache();
     let svc = build_service(repo.clone(), cache.clone());
-    let (resolver, mut rx) = build_resolver(repo.clone(), cache, allow_always());
+    let (resolver, mut rx) = build_resolver(&env, cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {
@@ -913,7 +919,7 @@ async fn rate_limited_resolve_returns_rate_limited_error() -> TestResult {
         })
         .await?;
 
-    let (resolver, _rx) = build_resolver(repo, cache(), Arc::new(DenyAlwaysRateLimiter));
+    let (resolver, _rx) = build_resolver(&env, cache(), Arc::new(DenyAlwaysRateLimiter));
     let err = resolver
         .resolve(&issued.raw_token)
         .await
@@ -948,7 +954,7 @@ async fn rate_limit_runs_on_cache_hit_too() -> TestResult {
     // Budget = 2: first two succeed; the third must trip even
     // though the entry is cache-hot.
     let limiter = Arc::new(CountingRateLimiter::new(2));
-    let (resolver, _rx) = build_resolver(repo, cache, limiter);
+    let (resolver, _rx) = build_resolver(&env, cache, limiter);
 
     resolver.resolve(&issued.raw_token).await?;
     resolver.resolve(&issued.raw_token).await?;
@@ -1032,7 +1038,13 @@ async fn introspector_dispatches_pat_to_resolver() -> TestResult {
         .await?;
 
     let (last_used_tx, _last_used_rx) = api_token_last_used_channel(CHANNEL_CAPACITY);
-    let resolver = ApiTokenResolver::new(repo, pat_cache, last_used_tx, allow_always());
+    // Auth-path lookups ride the auth pool (section-05).
+    let resolver = ApiTokenResolver::new(
+        ApiTokenRepo::new(env.db.auth_pool().clone()),
+        pat_cache,
+        last_used_tx,
+        allow_always(),
+    );
 
     let session_repo = SessionRepo::new(env.pool.clone());
     let user_repo = UserRepo::new(env.pool.clone());
@@ -1242,7 +1254,7 @@ async fn last_used_update_is_monotonic_under_late_event() -> TestResult {
         "SELECT last_used_at, last_used_ip FROM api_tokens WHERE id = $1",
         issued.token.id,
     )
-    .fetch_one(&env.pool)
+    .fetch_one(env.db.migrate_pool())
     .await?;
     let stored_at = row.last_used_at.expect("last_used_at populated");
     assert_eq!(
@@ -1445,7 +1457,7 @@ async fn http_self_revoke_succeeds_then_resolve_returns_unauthorized() -> TestRe
     let repo = ApiTokenRepo::new(env.pool.clone());
     let pat_cache = cache();
     let svc = Arc::new(build_service(repo.clone(), pat_cache.clone()));
-    let (resolver, _rx) = build_resolver(repo, pat_cache, allow_always());
+    let (resolver, _rx) = build_resolver(&env, pat_cache, allow_always());
 
     let issued = svc
         .issue(IssueApiTokenInput {

@@ -25,12 +25,18 @@ services:
       # pg_parquet 0.5.x: env-only opt-in for non-TLS endpoints; path-style
       # addressing is its default, so MinIO needs no further switches.
       AWS_ALLOW_HTTP: "true"
+      # Four-role split (RLS): passwords for the initdb role bootstrap.
+      ZAGROSI_PG_MIGRATE_PASSWORD: ${ZAGROSI_PG_MIGRATE_PASSWORD:?set in .env}
+      ZAGROSI_PG_APP_PASSWORD: ${ZAGROSI_PG_APP_PASSWORD:?set in .env}
+      ZAGROSI_PG_AUTH_PASSWORD: ${ZAGROSI_PG_AUTH_PASSWORD:?set in .env}
+      ZAGROSI_PG_MAINTENANCE_PASSWORD: ${ZAGROSI_PG_MAINTENANCE_PASSWORD:?set in .env}
     volumes:
       - pg_data:/var/lib/postgresql/data
       # File-level mount on purpose: a directory mount over
       # /docker-entrypoint-initdb.d would shadow the image-baked
       # 01-partman-bgw.sh preload/BGW templating hook.
       - ../../infra/postgres/init/00-multi-db.sh:/docker-entrypoint-initdb.d/00-multi-db.sh:ro
+      - ../../infra/postgres/init/01-zagrosi-roles.sh:/docker-entrypoint-initdb.d/02-zagrosi-roles.sh:ro
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:

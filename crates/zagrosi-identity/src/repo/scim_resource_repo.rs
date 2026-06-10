@@ -83,29 +83,11 @@ impl ScimResourceRepo {
             deleted_at: r.deleted_at,
         }))
     }
+}
 
-    /// Update `last_used_at` / `last_used_ip` on the SCIM token.
-    /// Best-effort: errors are absorbed by the caller — telemetry
-    /// breakage MUST NOT short-circuit a successful auth.
-    pub async fn touch_last_used(
-        &self,
-        token_id: Uuid,
-        ip: Option<std::net::IpAddr>,
-    ) -> Result<()> {
-        let ip_net: Option<sqlx::types::ipnetwork::IpNetwork> = ip.map(Into::into);
-        sqlx::query!(
-            r#"
-            UPDATE scim_tokens
-            SET last_used_at = now(),
-                last_used_ip = $2
-            WHERE id = $1
-            "#,
-            token_id,
-            ip_net,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+impl super::org_scoped::HasPool for ScimResourceRepo {
+    fn pool(&self) -> &sqlx::PgPool {
+        &self.pool
     }
 }
 
@@ -113,6 +95,7 @@ impl OrgScoped<'_, ScimResourceRepo> {
     /// Insert a new SCIM bearer.
     pub async fn create(&self, new: NewScimResource<'_>) -> Result<ScimResource> {
         let scopes_owned: Vec<String> = new.scopes.iter().map(|s| (*s).to_string()).collect();
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             INSERT INTO scim_tokens (
@@ -134,7 +117,7 @@ impl OrgScoped<'_, ScimResourceRepo> {
             new.tolerant_mode,
             new.expires_at,
         )
-        .fetch_one(self.inner().pool())
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -144,6 +127,7 @@ impl OrgScoped<'_, ScimResourceRepo> {
                 Some("scim_tokens_token_hash_unique_live"),
             )
         })?;
+        tx.commit().await?;
 
         let token_hash: [u8; 32] = row
             .token_hash
@@ -169,6 +153,7 @@ impl OrgScoped<'_, ScimResourceRepo> {
 
     /// Lookup a live SCIM token by hash, scoped to this org.
     pub async fn find_by_token_hash(&self, token_hash: &[u8; 32]) -> Result<Option<ScimResource>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT id, org_id, display_name, token_hash, scopes,
@@ -185,8 +170,9 @@ impl OrgScoped<'_, ScimResourceRepo> {
             self.org_id(),
             &token_hash[..],
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         let Some(r) = row else { return Ok(None) };
         let token_hash_arr: [u8; 32] = r
@@ -213,6 +199,7 @@ impl OrgScoped<'_, ScimResourceRepo> {
 
     /// Revoke a SCIM token scoped to this org.
     pub async fn revoke(&self, id: Uuid) -> Result<()> {
+        let mut tx = self.begin_org_tx().await?;
         sqlx::query!(
             r#"
             UPDATE scim_tokens
@@ -222,8 +209,36 @@ impl OrgScoped<'_, ScimResourceRepo> {
             self.org_id(),
             id,
         )
-        .execute(self.inner().pool())
+        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+    /// Update `last_used_at` / `last_used_ip` on the SCIM token.
+    /// Best-effort: errors are absorbed by the caller — telemetry
+    /// breakage MUST NOT short-circuit a successful auth. Runs as the
+    /// APP role with this wrapper's org GUC (the P1 UPDATE policy
+    /// requires tenant context; the auth role is SELECT-only).
+    pub async fn touch_last_used(
+        &self,
+        token_id: Uuid,
+        ip: Option<std::net::IpAddr>,
+    ) -> Result<()> {
+        let ip_net: Option<sqlx::types::ipnetwork::IpNetwork> = ip.map(Into::into);
+        let mut tx = self.begin_org_tx().await?;
+        sqlx::query!(
+            r#"
+            UPDATE scim_tokens
+            SET last_used_at = now(),
+                last_used_ip = $2
+            WHERE id = $1
+            "#,
+            token_id,
+            ip_net,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

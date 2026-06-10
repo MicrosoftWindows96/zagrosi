@@ -132,7 +132,6 @@ impl TestDb {
 
         let migrate_pool = connect(&dsn_for(&host, port, DbRole::Migrate)).await?;
         run_all_migrations(&migrate_pool).await?;
-        bootstrap::apply_interim_grants(&bootstrap_pool).await?;
 
         let app_pool = connect(&dsn_for(&host, port, DbRole::App)).await?;
         let auth_pool = connect(&dsn_for(&host, port, DbRole::Auth)).await?;

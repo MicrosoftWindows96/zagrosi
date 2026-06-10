@@ -25,8 +25,15 @@ use super::dns::DnsResolverPort;
 /// at startup; axum hands a clone to every request.
 #[derive(Clone)]
 pub struct RoutingState {
-    /// Cross-org routing-decision repo + per-org domain CRUD.
+    /// Per-org domain CRUD (OrgScoped surfaces; rides the app pool).
     pub org_idp_domain_repo: OrgIdpDomainRepo,
+    /// Cross-org routing-decision lookups for the discover endpoint.
+    /// Pre-tenant-context by nature (the email's domain is the public
+    /// anchor; no org is known yet), so the composition root wires this
+    /// repo over the AUTH pool — `zagrosi_auth` carries `USING (true)`
+    /// SELECT policies on `org_idp_domains`/`org_idps` (section-05
+    /// mechanism (a)); the app role without a GUC sees zero rows.
+    pub discovery_domain_repo: OrgIdpDomainRepo,
     /// Used by domain CRUD handlers to assert that the
     /// path-supplied `org_idp_id` belongs to the path-supplied
     /// org slug.
@@ -52,6 +59,7 @@ impl RoutingState {
     #[must_use]
     pub fn new(
         org_idp_domain_repo: OrgIdpDomainRepo,
+        discovery_domain_repo: OrgIdpDomainRepo,
         org_idp_repo: OrgIdpRepo,
         org_repo: OrgRepo,
         dns_resolver: Arc<dyn DnsResolverPort>,
@@ -60,6 +68,7 @@ impl RoutingState {
     ) -> Self {
         Self {
             org_idp_domain_repo,
+            discovery_domain_repo,
             org_idp_repo,
             org_repo,
             dns_resolver,

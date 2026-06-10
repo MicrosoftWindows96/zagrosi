@@ -417,7 +417,13 @@ impl UserRepo {
     /// row in `org_id`. Cross-org IDs and unknown IDs both return
     /// `None` so the SCIM handler can return `404 not_found`
     /// without status-code probing leaking existence.
+    ///
+    /// Runs in a short self-managed transaction with the `app.org_id`
+    /// GUC set: the membership join targets a P2 RLS table, which
+    /// reads as empty without tenant context.
     pub async fn find_in_org(&self, org_id: Uuid, user_id: Uuid) -> Result<Option<User>> {
+        let mut tx = self.pool.begin().await?;
+        super::with_org_context(&mut tx, org_id).await?;
         let row = sqlx::query!(
             r#"
             SELECT
@@ -437,8 +443,9 @@ impl UserRepo {
             org_id,
             user_id,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(row.map(|r| User {
             id: r.id,
             email: r.email,
@@ -456,75 +463,6 @@ impl UserRepo {
             updated_at: r.updated_at,
             deleted_at: r.deleted_at,
         }))
-    }
-
-    /// Count live users with a live membership in `org_id`.
-    pub async fn count_in_org(&self, org_id: Uuid) -> Result<i64> {
-        let row = sqlx::query!(
-            r#"
-            SELECT COUNT(*) AS "count!"
-            FROM users u
-            JOIN user_org_memberships m ON m.user_id = u.id
-            WHERE m.org_id = $1
-              AND u.deleted_at IS NULL
-              AND m.deleted_at IS NULL
-            "#,
-            org_id,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(row.count)
-    }
-
-    /// List a page of users in `org_id`, ordered by id ascending.
-    pub async fn list_in_org_page(
-        &self,
-        org_id: Uuid,
-        offset: i64,
-        limit: i64,
-    ) -> Result<Vec<User>> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                u.id, u.email, u.email_lower as "email_lower!",
-                u.display_name, u.email_verified_at, u.password_hash,
-                u.password_updated_at, u.password_hash_version,
-                u.mfa_enrolled_at, u.active, u.external_id, u.row_version,
-                u.created_at, u.updated_at, u.deleted_at
-            FROM users u
-            JOIN user_org_memberships m ON m.user_id = u.id
-            WHERE m.org_id = $1
-              AND u.deleted_at IS NULL
-              AND m.deleted_at IS NULL
-            ORDER BY u.id ASC
-            OFFSET $2 LIMIT $3
-            "#,
-            org_id,
-            offset,
-            limit,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows
-            .into_iter()
-            .map(|r| User {
-                id: r.id,
-                email: r.email,
-                email_lower: r.email_lower,
-                display_name: r.display_name,
-                email_verified_at: r.email_verified_at,
-                password_hash: r.password_hash,
-                password_updated_at: r.password_updated_at,
-                password_hash_version: r.password_hash_version,
-                mfa_enrolled_at: r.mfa_enrolled_at,
-                active: r.active,
-                external_id: r.external_id,
-                row_version: r.row_version,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                deleted_at: r.deleted_at,
-            })
-            .collect())
     }
 
     /// SCIM tenant-scoped read by id, inside a caller-supplied

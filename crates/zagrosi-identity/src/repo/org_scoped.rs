@@ -20,7 +20,18 @@
 //! matches the project-wide invariant that cross-tenant probes
 //! return `404 Not Found`, never `403 Forbidden`.
 
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+
+use crate::error::Result;
+
+/// Pool access for the tenant-transaction helper. Every repo whose
+/// multi-tenant surface lives on `OrgScoped<R>` implements this so
+/// [`OrgScoped::begin_org_tx`] can open RLS-ready transactions.
+pub(crate) trait HasPool {
+    /// Borrow the repo's connection pool.
+    fn pool(&self) -> &PgPool;
+}
 
 /// Tenant-bound view over a repo. See module docs.
 ///
@@ -66,6 +77,21 @@ impl<'a, R> OrgScoped<'a, R> {
     #[must_use]
     pub const fn inner(&self) -> &'a R {
         self.inner
+    }
+}
+
+impl<R> OrgScoped<'_, R> {
+    /// Begin a transaction with the `app.org_id` GUC set to this
+    /// wrapper's org. Every `OrgScoped` query runs through this so the
+    /// RLS policies (identity migration 025) see tenant context — a
+    /// pool-direct query would fail closed to zero rows.
+    pub(crate) async fn begin_org_tx(&self) -> Result<Transaction<'static, Postgres>>
+    where
+        R: HasPool + Sync,
+    {
+        let mut tx = self.inner.pool().begin().await?;
+        super::with_org_context(&mut tx, self.org_id).await?;
+        Ok(tx)
     }
 }
 

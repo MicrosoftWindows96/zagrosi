@@ -96,6 +96,12 @@ impl OrgIdpDomainRepo {
     }
 }
 
+impl super::org_scoped::HasPool for OrgIdpDomainRepo {
+    fn pool(&self) -> &sqlx::PgPool {
+        &self.pool
+    }
+}
+
 impl OrgScoped<'_, OrgIdpDomainRepo> {
     /// Insert a new domain claim. The unique partial index on
     /// `(lower(domain), org_idp_id) WHERE verified_at IS NOT NULL`
@@ -106,6 +112,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
         // Org-membership check: the claimed `org_idp_id` MUST belong
         // to this scope's org. Reject cross-org probes with
         // `OrgNotFound` (404) per the project-wide convention.
+        let mut tx = self.begin_org_tx().await?;
         let belongs = sqlx::query!(
             r#"
             SELECT 1 AS sentinel
@@ -115,7 +122,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             self.org_id(),
             new.org_idp_id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?
         .is_some();
         if !belongs {
@@ -126,9 +133,9 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             r#"
             INSERT INTO org_idp_domains (
                 id, org_idp_id, domain, challenge_token,
-                priority
+                priority, org_id
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, org_idp_id, domain, challenge_token,
                       verified_at, last_verified_via,
                       priority, created_at, deleted_at
@@ -138,8 +145,9 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             new.domain,
             new.challenge_token,
             new.priority,
+            self.org_id(),
         )
-        .fetch_one(self.inner().pool())
+        .fetch_one(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -151,6 +159,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
                 None,
             )
         })?;
+        tx.commit().await?;
 
         Ok(OrgIdpDomain {
             id: row.id,
@@ -174,6 +183,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
         org_idp_id: Uuid,
         domain_id: Uuid,
     ) -> Result<Option<OrgIdpDomain>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             SELECT d.id, d.org_idp_id, d.domain, d.challenge_token,
@@ -191,8 +201,9 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             org_idp_id,
             domain_id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(row.map(|r| OrgIdpDomain {
             id: r.id,
@@ -211,6 +222,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
     /// sorted by `(priority ASC, domain ASC)`. Returns an empty
     /// vector when the IdP has no claims yet.
     pub async fn list_in_idp(&self, org_idp_id: Uuid) -> Result<Vec<OrgIdpDomain>> {
+        let mut tx = self.begin_org_tx().await?;
         let rows = sqlx::query!(
             r#"
             SELECT d.id, d.org_idp_id, d.domain, d.challenge_token,
@@ -227,8 +239,9 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             self.org_id(),
             org_idp_id,
         )
-        .fetch_all(self.inner().pool())
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
 
         Ok(rows
             .into_iter()
@@ -263,6 +276,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
         domain_id: Uuid,
         last_verified_via: &str,
     ) -> Result<OrgIdpDomain> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             UPDATE org_idp_domains AS d
@@ -284,7 +298,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             domain_id,
             last_verified_via,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| {
             map_sqlx_error(
@@ -296,6 +310,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
                 None,
             )
         })?;
+        tx.commit().await?;
 
         match row {
             Some(r) => Ok(OrgIdpDomain {
@@ -319,6 +334,7 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
     /// `domain_lower` field consistently with the rest of the
     /// lifecycle events). Returns `None` for cross-org / unknown rows.
     pub async fn soft_delete(&self, org_idp_id: Uuid, domain_id: Uuid) -> Result<Option<String>> {
+        let mut tx = self.begin_org_tx().await?;
         let row = sqlx::query!(
             r#"
             UPDATE org_idp_domains AS d
@@ -336,8 +352,9 @@ impl OrgScoped<'_, OrgIdpDomainRepo> {
             org_idp_id,
             domain_id,
         )
-        .fetch_optional(self.inner().pool())
+        .fetch_optional(&mut *tx)
         .await?;
+        tx.commit().await?;
         Ok(row.map(|r| r.domain))
     }
 }

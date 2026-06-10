@@ -28,14 +28,16 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp_id)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
     sqlx::query(
-        "INSERT INTO org_idp_domains (id, org_idp_id, domain) VALUES ($1, $2, 'example.com')",
+        "INSERT INTO org_idp_domains (id, org_idp_id, org_id, domain) \
+         VALUES ($1, $2, $3, 'example.com')",
     )
     .bind(Uuid::now_v7())
     .bind(idp_id)
-    .execute(&env.pool)
+    .bind(org)
+    .execute(env.db.migrate_pool())
     .await?;
 
     let scim = ScimResourceRepo::new(env.pool.clone());
@@ -102,7 +104,7 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
     // org_idps and org_idp_domains soft-deleted.
     let idp_dead: bool = sqlx::query("SELECT deleted_at IS NOT NULL FROM org_idps WHERE id = $1")
         .bind(idp_id)
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert!(idp_dead);
@@ -110,7 +112,7 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
     let scim_dead: bool =
         sqlx::query("SELECT deleted_at IS NOT NULL FROM scim_tokens WHERE id = $1")
             .bind(scim_id)
-            .fetch_one(&env.pool)
+            .fetch_one(env.db.migrate_pool())
             .await?
             .get(0);
     assert!(scim_dead);
@@ -118,7 +120,7 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
     let mem_dead: bool = sqlx::query("SELECT deleted_at IS NOT NULL FROM user_org_memberships WHERE org_id = $1 AND user_id = $2")
         .bind(org)
         .bind(user)
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert!(mem_dead);
@@ -126,7 +128,7 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
     // Sessions revoked.
     let sess_dead: bool = sqlx::query("SELECT revoked_at IS NOT NULL FROM sessions WHERE id = $1")
         .bind(sess_id)
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert!(sess_dead);
@@ -136,7 +138,7 @@ async fn org_soft_delete_cascade_flips_children() -> TestResult {
         "SELECT revoked_at IS NULL AND deleted_at IS NULL FROM service_tokens WHERE id = $1",
     )
     .bind(svc_id)
-    .fetch_one(&env.pool)
+    .fetch_one(env.db.migrate_pool())
     .await?
     .get(0);
     assert!(svc_alive);
@@ -153,7 +155,7 @@ async fn user_soft_delete_cascade_revokes_and_tombstones() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp_id)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     // Session.
@@ -202,25 +204,28 @@ async fn user_soft_delete_cascade_revokes_and_tombstones() -> TestResult {
     .await?;
 
     let mut tx = env.pool.begin().await?;
+    // The user cascade touches tenanted rows; as zagrosi_app it needs
+    // org context (cross-org purge is the maintenance role's job).
+    zagrosi_identity::repo::with_org_context(&mut tx, org).await?;
     soft_delete_user(&mut tx, user).await?;
     tx.commit().await?;
 
     let sess_dead: bool = sqlx::query("SELECT revoked_at IS NOT NULL FROM sessions WHERE id = $1")
         .bind(sess_id)
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert!(sess_dead);
 
     let pat_dead: bool = sqlx::query("SELECT revoked_at IS NOT NULL FROM api_tokens WHERE id = $1")
         .bind(pat_id)
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert!(pat_dead);
 
     let tomb_count: i64 = sqlx::query("SELECT COUNT(*) FROM federated_identities WHERE user_id IS NULL AND issuer_or_entity_id = 'https://i' AND subject_or_nameid = 'u-1'")
-        .fetch_one(&env.pool)
+        .fetch_one(env.db.migrate_pool())
         .await?
         .get(0);
     assert_eq!(tomb_count, 1, "federated identity must be tombstoned");
@@ -238,7 +243,7 @@ async fn federated_tombstone_blocks_re_attachment() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let fed = FederatedIdentityRepo::new(env.pool.clone());
@@ -254,6 +259,9 @@ async fn federated_tombstone_blocks_re_attachment() -> TestResult {
     .await?;
 
     let mut tx = env.pool.begin().await?;
+    // The user cascade touches tenanted rows; as zagrosi_app it needs
+    // org context (cross-org purge is the maintenance role's job).
+    zagrosi_identity::repo::with_org_context(&mut tx, org).await?;
     soft_delete_user(&mut tx, user1).await?;
     tx.commit().await?;
 

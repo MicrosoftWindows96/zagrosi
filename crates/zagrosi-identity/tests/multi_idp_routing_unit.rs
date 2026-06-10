@@ -167,12 +167,15 @@ impl DnsResolverPort for CountingDnsMock {
 }
 
 /// Build a routing state with the given DNS mock + a fresh cache.
-fn routing_state_with_mock(pool: &PgPool, dns: Arc<dyn DnsResolverPort>) -> RoutingState {
+fn routing_state_with_mock(env: &common::TestEnv, dns: Arc<dyn DnsResolverPort>) -> RoutingState {
     let cache = Arc::new(DomainVerifyCache::new(1_000, 10));
     RoutingState::new(
-        OrgIdpDomainRepo::new(pool.clone()),
-        OrgIdpRepo::new(pool.clone()),
-        OrgRepo::new(pool.clone()),
+        OrgIdpDomainRepo::new(env.pool.clone()),
+        // Discovery is pre-tenant-context: rides the auth pool, exactly
+        // as the composition root wires production (section-05).
+        OrgIdpDomainRepo::new(env.db.auth_pool().clone()),
+        OrgIdpRepo::new(env.pool.clone()),
+        OrgRepo::new(env.pool.clone()),
         dns,
         cache,
         Arc::new(NoopAuditor),
@@ -188,7 +191,7 @@ fn routing_state_with_mock(pool: &PgPool, dns: Arc<dyn DnsResolverPort>) -> Rout
 async fn discover_zero_matches_returns_password() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let normalised = normalise("alice@nobody.example")?;
     let response = discover::decide(&state, &normalised, None).await?;
@@ -201,10 +204,10 @@ async fn discover_zero_matches_returns_password() -> TestResult {
 async fn discover_single_oidc_match_returns_oidc_start_url() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "acme").await?;
-    let idp_id = seed_org_idp(&env.pool, org_id, "oidc", "Acme OIDC", true).await?;
+    let idp_id = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "Acme OIDC", true).await?;
     seed_domain(&env.pool, org_id, idp_id, "acme.com", 100, true).await?;
 
     let normalised = normalise("alice@acme.com")?;
@@ -223,10 +226,10 @@ async fn discover_single_oidc_match_returns_oidc_start_url() -> TestResult {
 async fn discover_single_saml_match_returns_saml_start_url() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "saml-org").await?;
-    let idp_id = seed_org_idp(&env.pool, org_id, "saml", "Acme SAML", true).await?;
+    let idp_id = seed_org_idp(env.db.migrate_pool(), org_id, "saml", "Acme SAML", true).await?;
     seed_domain(&env.pool, org_id, idp_id, "samlcorp.com", 100, true).await?;
 
     let normalised = normalise("alice@samlcorp.com")?;
@@ -243,14 +246,14 @@ async fn discover_single_saml_match_returns_saml_start_url() -> TestResult {
 async fn discover_n_matches_returns_sorted_picker() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_a = seed_org(&env.pool, "acme-a").await?;
     let org_b = seed_org(&env.pool, "acme-b").await?;
     // Both IdPs claim the same verified domain. The picker MUST
     // sort by `(priority ASC, display_name ASC)`.
-    let oidc_idp = seed_org_idp(&env.pool, org_a, "oidc", "Z OIDC", true).await?;
-    let saml_idp = seed_org_idp(&env.pool, org_b, "saml", "A SAML", true).await?;
+    let oidc_idp = seed_org_idp(env.db.migrate_pool(), org_a, "oidc", "Z OIDC", true).await?;
+    let saml_idp = seed_org_idp(env.db.migrate_pool(), org_b, "saml", "A SAML", true).await?;
     seed_domain(&env.pool, org_a, oidc_idp, "shared.com", 200, true).await?;
     seed_domain(&env.pool, org_b, saml_idp, "shared.com", 100, true).await?;
 
@@ -271,11 +274,11 @@ async fn discover_n_matches_returns_sorted_picker() -> TestResult {
 async fn discover_subdomain_and_parent_treated_as_distinct() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "subdomain-org").await?;
-    let oidc = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
-    let saml = seed_org_idp(&env.pool, org_id, "saml", "SAML", true).await?;
+    let oidc = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
+    let saml = seed_org_idp(env.db.migrate_pool(), org_id, "saml", "SAML", true).await?;
     seed_domain(&env.pool, org_id, oidc, "acme.com", 100, true).await?;
     seed_domain(&env.pool, org_id, saml, "eu.acme.com", 100, true).await?;
 
@@ -300,11 +303,18 @@ async fn discover_subdomain_and_parent_treated_as_distinct() -> TestResult {
 async fn discover_disabled_idp_falls_back_to_password() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "disabled-org").await?;
     // enabled=false at the IdP — domain claim still verified.
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "Disabled OIDC", false).await?;
+    let idp = seed_org_idp(
+        env.db.migrate_pool(),
+        org_id,
+        "oidc",
+        "Disabled OIDC",
+        false,
+    )
+    .await?;
     seed_domain(&env.pool, org_id, idp, "disabled.example", 100, true).await?;
 
     let normalised = normalise("alice@disabled.example")?;
@@ -318,10 +328,10 @@ async fn discover_disabled_idp_falls_back_to_password() -> TestResult {
 async fn discover_unverified_claim_does_not_route() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "unverified-org").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
     // verified=false leaves verified_at NULL.
     seed_domain(&env.pool, org_id, idp, "pending.example", 100, false).await?;
 
@@ -336,7 +346,7 @@ async fn discover_unverified_claim_does_not_route() -> TestResult {
 async fn discover_public_domain_short_circuits_without_db_lookup() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let normalised = normalise("alice@gmail.com")?;
     let response = discover::decide(&state, &normalised, None).await?;
@@ -349,10 +359,10 @@ async fn discover_public_domain_short_circuits_without_db_lookup() -> TestResult
 async fn discover_plus_tag_strips_before_lookup() -> TestResult {
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "tag-org").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
     seed_domain(&env.pool, org_id, idp, "tagged.example", 100, true).await?;
 
     // plus-tag does not appear in the domain — but the local-part
@@ -376,7 +386,7 @@ async fn discover_plus_tag_strips_before_lookup() -> TestResult {
 async fn org_idp_domain_repo_round_trip() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "domain-repo-org").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
 
     let repo = OrgIdpDomainRepo::new(env.pool.clone());
     let token = mint(TokenPrefix::Verification);
@@ -421,7 +431,7 @@ async fn org_idp_domain_repo_rejects_cross_org_create() -> TestResult {
     let env = migrated_env().await?;
     let org_a = seed_org(&env.pool, "cross-a").await?;
     let org_b = seed_org(&env.pool, "cross-b").await?;
-    let idp_a = seed_org_idp(&env.pool, org_a, "oidc", "A OIDC", true).await?;
+    let idp_a = seed_org_idp(env.db.migrate_pool(), org_a, "oidc", "A OIDC", true).await?;
 
     let repo = OrgIdpDomainRepo::new(env.pool.clone());
     let token = mint(TokenPrefix::Verification);
@@ -445,8 +455,8 @@ async fn org_idp_domain_repo_rejects_cross_org_create() -> TestResult {
 async fn lookup_routes_excludes_disabled_and_deleted() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "exclude-org").await?;
-    let live = seed_org_idp(&env.pool, org_id, "oidc", "Live OIDC", true).await?;
-    let dead = seed_org_idp(&env.pool, org_id, "saml", "Dead SAML", true).await?;
+    let live = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "Live OIDC", true).await?;
+    let dead = seed_org_idp(env.db.migrate_pool(), org_id, "saml", "Dead SAML", true).await?;
     seed_domain(&env.pool, org_id, live, "exclude.example", 100, true).await?;
     seed_domain(&env.pool, org_id, dead, "exclude.example", 50, true).await?;
 
@@ -455,10 +465,10 @@ async fn lookup_routes_excludes_disabled_and_deleted() -> TestResult {
     // gate to drop the row from routing.
     sqlx::query("UPDATE org_idps SET deleted_at = now() WHERE id = $1")
         .bind(dead)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
-    let repo = OrgIdpDomainRepo::new(env.pool.clone());
+    let repo = OrgIdpDomainRepo::new(env.db.auth_pool().clone());
     let hits = repo
         .lookup_routes_by_domain_lower("exclude.example")
         .await?;
@@ -542,7 +552,7 @@ async fn tombstone_lookup_returns_linked_when_user_present() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "linked-org").await?;
     let user_id = seed_user(&env.pool, "alice@linked.example").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
 
     let repo = FederatedIdentityRepo::new(env.pool.clone());
     repo.create(NewFederatedIdentity {
@@ -575,7 +585,7 @@ async fn tombstone_lookup_returns_linked_when_user_present() -> TestResult {
 async fn tombstone_lookup_returns_tombstoned_when_user_id_null() -> TestResult {
     let env = migrated_env().await?;
     let org_id = seed_org(&env.pool, "tomb-org").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "OIDC", true).await?;
 
     // Insert a tombstone directly (user_id NULL) — bypasses the
     // repo's create which requires a real user_id at insert.
@@ -645,10 +655,10 @@ async fn discover_idn_domain_routes_after_punycode_normalisation() -> TestResult
     // either Unicode or punycode resolves to the same IdP.
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let org_id = seed_org(&env.pool, "idn-org").await?;
-    let idp = seed_org_idp(&env.pool, org_id, "oidc", "IDN OIDC", true).await?;
+    let idp = seed_org_idp(env.db.migrate_pool(), org_id, "oidc", "IDN OIDC", true).await?;
     // Insert via the same path as the create_domain handler — the
     // helper itself normalises before persisting.
     let repo = OrgIdpDomainRepo::new(env.pool.clone());
@@ -736,7 +746,7 @@ async fn discover_routes_psl_public_suffix_to_password() -> TestResult {
     // short-circuits public-suffix domains to password.
     let env = migrated_env().await?;
     let dns = CountingDnsMock::verified_with_path("1.1.1.1+9.9.9.9");
-    let state = routing_state_with_mock(&env.pool, dns);
+    let state = routing_state_with_mock(&env, dns);
 
     let normalised = normalise("user@appspot.com")?;
     let response = discover::decide(&state, &normalised, None).await?;

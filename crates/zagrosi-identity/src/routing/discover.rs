@@ -158,7 +158,7 @@ pub async fn decide(
 
     let safe_path = safe_return_to(return_to);
     let hits = state
-        .org_idp_domain_repo
+        .discovery_domain_repo
         .lookup_routes_by_domain_lower(&normalised.lookup_domain)
         .await?;
 

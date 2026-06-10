@@ -116,8 +116,11 @@ pub async fn scim_bearer_layer(
     };
     req.extensions_mut().insert(auth);
 
-    if let Err(err) = state
-        .scim_tokens
+    // The touch is a tenant WRITE: it rides the APP pool with the
+    // resolved row's org as context (state.scim_tokens is the
+    // SELECT-only auth-pool repo).
+    let touch_repo = crate::repo::ScimResourceRepo::new(state.pool.clone());
+    if let Err(err) = crate::repo::OrgScoped::new(&touch_repo, row.org_id)
         .touch_last_used(row.id, Some(peer.ip()))
         .await
     {

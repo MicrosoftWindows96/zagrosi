@@ -6224,6 +6224,7 @@ dependencies = [
  "validator",
  "wiremock",
  "zagrosi-core",
+ "zagrosi-db",
  "zagrosi-test-support",
  "zeroize",
 ]

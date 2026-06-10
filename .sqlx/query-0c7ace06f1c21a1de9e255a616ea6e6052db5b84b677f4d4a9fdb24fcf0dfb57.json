@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO group_memberships (id, group_id, user_id, org_id)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (group_id, user_id)\n                WHERE deleted_at IS NULL\n                DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c7ace06f1c21a1de9e255a616ea6e6052db5b84b677f4d4a9fdb24fcf0dfb57"
+}

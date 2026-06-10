@@ -3,10 +3,12 @@
 //! Superuser bootstrap — the only superuser code path in the harness.
 //!
 //! Runs once per container: creates the four runtime roles with the exact
-//! attribute set section 05's migrations later assert, grants
-//! database/schema access, pre-installs the untrusted extensions
-//! (`pg_partman`, `pg_parquet`) the way section 01's compose initdb hook does
-//! in dev, and applies the interim baseline grants that section 05 deletes.
+//! attribute set the identity role migration (021) asserts, grants
+//! database/schema access, and pre-installs the untrusted extensions
+//! (`pg_partman`, `pg_parquet`) the way section 01's compose initdb hook
+//! does in dev. Table-level grants come from the migration set itself
+//! (identity migration 024) — the interim baseline shim was deleted when
+//! those landed.
 
 // Private module: `pub(crate)` is technically redundant here but states the
 // intent (these must never become part of the public API — M3 of the
@@ -105,32 +107,6 @@ GRANT USAGE ON SCHEMA partman TO zagrosi_migrate;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA partman TO zagrosi_migrate;
 GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA partman TO zagrosi_migrate;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA partman TO zagrosi_migrate;
-",
-    )
-    .execute(superuser)
-    .await?;
-    Ok(())
-}
-
-/// Interim baseline grants — **temporary shim, deleted by section 05**.
-///
-/// Until the identity role/grant migrations (section 05) land the explicit
-/// per-table GRANT matrix, the role pools would get `permission denied` on
-/// every table. Section 05 removes this call and its tests assert the exact
-/// migration-defined GRANT matrix instead. Do not add grants anywhere else.
-pub(crate) async fn apply_interim_grants(superuser: &PgPool) -> Result<(), HarnessError> {
-    sqlx::raw_sql(
-        r"
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
-  TO zagrosi_app, zagrosi_auth, zagrosi_maintenance;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public
-  TO zagrosi_app, zagrosi_auth, zagrosi_maintenance;
-ALTER DEFAULT PRIVILEGES FOR ROLE zagrosi_migrate IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES
-  TO zagrosi_app, zagrosi_auth, zagrosi_maintenance;
-ALTER DEFAULT PRIVILEGES FOR ROLE zagrosi_migrate IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES
-  TO zagrosi_app, zagrosi_auth, zagrosi_maintenance;
 ",
     )
     .execute(superuser)

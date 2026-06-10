@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO org_idp_domains (\n                id, org_idp_id, domain, challenge_token,\n                priority\n            )\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, org_idp_id, domain, challenge_token,\n                      verified_at, last_verified_via,\n                      priority, created_at, deleted_at\n            ",
+  "query": "\n            INSERT INTO org_idp_domains (\n                id, org_idp_id, domain, challenge_token,\n                priority, org_id\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, org_idp_id, domain, challenge_token,\n                      verified_at, last_verified_via,\n                      priority, created_at, deleted_at\n            ",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,8 @@
         "Uuid",
         "Text",
         "Text",
-        "Int4"
+        "Int4",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -70,5 +71,5 @@
       true
     ]
   },
-  "hash": "3154e51600aa2a771e63118b0ae735426864f098f2bdd3fda195a19e215a4d97"
+  "hash": "a472f014756a3368b3e23f4877c262d7ea82fc71b697ea8482e2c1debad9f987"
 }

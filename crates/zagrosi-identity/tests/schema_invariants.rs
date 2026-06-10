@@ -152,10 +152,13 @@ async fn multi_tenant_inserts_require_org_id() -> TestResult {
 
     for (table, sql) in cases {
         let id = Uuid::now_v7();
+        // Probe via the BYPASSRLS migrate pool: as zagrosi_app the P1
+        // WITH CHECK (SQLSTATE 42501) fires before the NOT NULL
+        // constraint this test pins.
         let res = sqlx::query(sql)
             .bind(id)
             .bind(vec![0_u8; 32])
-            .execute(&env.pool)
+            .execute(env.db.migrate_pool())
             .await;
         let Err(err) = res else {
             panic!("expected NOT NULL violation for {table} but insert succeeded");

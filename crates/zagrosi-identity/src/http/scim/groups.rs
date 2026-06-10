@@ -23,7 +23,7 @@ use zagrosi_core::{
 };
 
 use crate::domain::Group;
-use crate::repo::{NewGroup, OrgScoped, group_from_row};
+use crate::repo::{NewGroup, OrgScoped, group_from_row, with_org_context};
 
 use super::etag::{quoted_etag, version_matches};
 use super::filter::ResourceKind;
@@ -187,6 +187,11 @@ pub async fn list_groups(
         .execute(&mut *tx)
         .await
         .map_err(super::ScimError::from)?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
 
     let mut total_qb: QueryBuilder<'_, sqlx::Postgres> =
         QueryBuilder::new("SELECT COUNT(*) FROM groups WHERE org_id = ");
@@ -279,6 +284,11 @@ pub async fn create_group(
         })?;
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let scoped = OrgScoped::new(&state.groups, auth.org_id);
     let group = scoped
         .create_group_in_tx(
@@ -379,6 +389,11 @@ pub async fn patch_group(
     let ops = parse_patch_ops(&body, auth.tolerant_mode)?;
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let scoped = OrgScoped::new(&state.groups, auth.org_id);
     let current = scoped
         .find_group_in_tx(&mut tx, group_id)
@@ -498,6 +513,11 @@ pub async fn put_group(
         })?;
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let scoped = OrgScoped::new(&state.groups, auth.org_id);
     let current = scoped
         .find_group_in_tx(&mut tx, group_id)
@@ -605,6 +625,11 @@ pub async fn delete_group(
 ) -> Result<Response, ScimError> {
     let group_id = parse_id(&id)?;
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let scoped = OrgScoped::new(&state.groups, auth.org_id);
     scoped.soft_delete_group_in_tx(&mut tx, group_id).await?;
     tx.commit().await?;

@@ -25,7 +25,7 @@ use zagrosi_core::{
 };
 
 use crate::domain::User;
-use crate::repo::{NewMembership, NewUser, user_from_row};
+use crate::repo::{NewMembership, NewUser, user_from_row, with_org_context};
 
 use super::filter::ResourceKind;
 use super::translate::{SortDir, push_filter};
@@ -218,6 +218,11 @@ pub async fn list_users(
         .execute(&mut *tx)
         .await
         .map_err(super::ScimError::from)?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
 
     let mut total_qb: QueryBuilder<'_, sqlx::Postgres> = QueryBuilder::new(
         "SELECT COUNT(*) FROM users \
@@ -311,6 +316,11 @@ pub async fn create_user(
     let primary_email = payload.primary_email().unwrap_or(user_name);
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let existing_global = state
         .users
         .find_by_email_lower_in_tx(&mut tx, primary_email)
@@ -476,6 +486,11 @@ pub async fn patch_user(
     let ops: Vec<PatchOpInput> = parse_patch_ops(&body, auth.tolerant_mode)?;
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let current = state
         .users
         .find_in_org_in_tx(&mut tx, auth.org_id, user_id)
@@ -572,6 +587,11 @@ pub async fn put_user(
         })?;
 
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let current = state
         .users
         .find_in_org_in_tx(&mut tx, auth.org_id, user_id)
@@ -660,6 +680,11 @@ pub async fn delete_user(
 ) -> Result<Response, ScimError> {
     let user_id = parse_user_id(&id)?;
     let mut tx = state.pool.begin().await?;
+    // RLS: org context from the SCIM bearer token, set before any
+    // tenanted statement in this transaction (section-05 policies).
+    with_org_context(&mut tx, auth.org_id)
+        .await
+        .map_err(ScimError::from)?;
     let current = state
         .users
         .find_in_org(auth.org_id, user_id)

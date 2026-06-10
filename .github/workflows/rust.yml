@@ -148,6 +148,10 @@ jobs:
             echo "AUTHENTIK_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)"
             echo "ZAGROSI_TEST_SCIM_BEARER=scim_$(openssl rand -hex 32)"
             echo "ZAGROSI_TEST_USER_PASSWORD=$(openssl rand -hex 16)"
+            echo "ZAGROSI_PG_MIGRATE_PASSWORD=$(openssl rand -hex 16)"
+            echo "ZAGROSI_PG_APP_PASSWORD=$(openssl rand -hex 16)"
+            echo "ZAGROSI_PG_AUTH_PASSWORD=$(openssl rand -hex 16)"
+            echo "ZAGROSI_PG_MAINTENANCE_PASSWORD=$(openssl rand -hex 16)"
             echo "RUN_INTEGRATION=1"
           } >> .env
       - name: Bring up test compose smoke

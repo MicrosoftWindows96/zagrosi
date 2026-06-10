@@ -24,7 +24,7 @@ async fn oidc_pending_state_unique_until_used() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let repo = OidcPendingRepo::new(env.pool.clone());
@@ -144,7 +144,7 @@ async fn saml_replay_unique_pair() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'saml', 'd', '{}'::jsonb)")
         .bind(idp)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let repo = SamlReplayRepo::new(env.pool.clone());
@@ -178,7 +178,7 @@ async fn federated_identity_anchor_unique() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     sqlx::query("INSERT INTO federated_identities (id, protocol, issuer_or_entity_id, subject_or_nameid, org_idp_id, user_id) VALUES ($1, 'oidc', 'https://i.example', 'sub-1', $2, $3)")

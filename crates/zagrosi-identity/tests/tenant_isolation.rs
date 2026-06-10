@@ -227,7 +227,7 @@ async fn federated_anchor_lookup_is_globally_unique_by_design() -> TestResult {
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp_a)
         .bind(org_a)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let fed = FederatedIdentityRepo::new(env.pool.clone());
@@ -267,7 +267,7 @@ async fn oidc_pending_state_lookup_is_globally_unique_by_design() -> TestResult 
     sqlx::query("INSERT INTO org_idps (id, org_id, protocol, display_name, config) VALUES ($1, $2, 'oidc', 'd', '{}'::jsonb)")
         .bind(idp)
         .bind(org)
-        .execute(&env.pool)
+        .execute(env.db.migrate_pool())
         .await?;
 
     let repo = OidcPendingRepo::new(env.pool.clone());

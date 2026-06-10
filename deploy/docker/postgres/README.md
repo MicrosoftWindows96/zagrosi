@@ -93,3 +93,31 @@ If you cannot run this image:
 - **pg_parquet optional.** Without it, audit cold archival degrades to a
   documented manual export path (see `documentation/audit.md` once the
   archival unit lands); everything else works.
+
+### Role bootstrap (managed Postgres)
+
+Initdb hooks do not apply to managed Postgres. Before running migrations,
+execute the following as your provider's admin/superuser (BYPASSRLS cannot
+be conferred by a non-superuser; identity migration 021 asserts these
+attributes and aborts with an actionable error when they are missing).
+Set the passwords out-of-band — never in SQL files you commit:
+
+```sql
+CREATE ROLE zagrosi_migrate     LOGIN NOSUPERUSER BYPASSRLS;
+CREATE ROLE zagrosi_app         LOGIN NOSUPERUSER NOBYPASSRLS;
+CREATE ROLE zagrosi_auth        LOGIN NOSUPERUSER NOBYPASSRLS;
+CREATE ROLE zagrosi_maintenance LOGIN NOSUPERUSER BYPASSRLS;
+ALTER ROLE zagrosi_migrate     PASSWORD '...';
+ALTER ROLE zagrosi_app         PASSWORD '...';
+ALTER ROLE zagrosi_auth        PASSWORD '...';
+ALTER ROLE zagrosi_maintenance PASSWORD '...';
+GRANT CONNECT ON DATABASE zagrosi
+  TO zagrosi_migrate, zagrosi_app, zagrosi_auth, zagrosi_maintenance;
+GRANT CREATE, TEMP ON DATABASE zagrosi TO zagrosi_migrate;
+GRANT CREATE, USAGE ON SCHEMA public TO zagrosi_migrate;
+GRANT USAGE ON SCHEMA public TO zagrosi_app, zagrosi_auth, zagrosi_maintenance;
+```
+
+The four runtime DSNs map to `ZAGROSI_DATABASE_MIGRATE_URL`,
+`ZAGROSI_DATABASE_URL` (zagrosi_app), `ZAGROSI_DATABASE_AUTH_URL`, and
+`ZAGROSI_DATABASE_MAINTENANCE_URL`.
