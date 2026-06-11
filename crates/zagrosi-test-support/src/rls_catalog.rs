@@ -44,6 +44,14 @@ pub enum RlsPattern {
 pub type SeedFn =
     fn(&PgPool, Uuid) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>>;
 
+/// `zagrosi_app` verb set for tables with full DML (the identity
+/// baseline — RLS does row filtering, grants do verb filtering).
+pub const APP_FULL_DML: &[&str] = &["SELECT", "INSERT", "UPDATE", "DELETE"];
+
+/// `zagrosi_app` verb set for soft-delete tables: no DELETE — rows are
+/// tombstoned via `deleted_at`, never removed (rbac convention).
+pub const APP_SOFT_DELETE: &[&str] = &["SELECT", "INSERT", "UPDATE"];
+
 /// One catalog row.
 pub struct RlsCatalogEntry {
     /// Table name in schema `public`.
@@ -54,6 +62,9 @@ pub struct RlsCatalogEntry {
     pub rationale: &'static str,
     /// Two-org fixture seeder for the isolation proptests.
     pub seed: Option<SeedFn>,
+    /// Exact `zagrosi_app` grant verbs — the machine-readable grant
+    /// matrix the `rls_grants` suite asserts positively AND negatively.
+    pub app_verbs: &'static [&'static str],
 }
 
 /// The authoritative catalog (identity tables; later sections append).
@@ -66,18 +77,21 @@ pub fn rls_catalog() -> &'static [RlsCatalogEntry] {
             pattern: RlsPattern::P1Standard,
             rationale: "tenanted PATs; auth-path hash reads via zagrosi_auth USING(true) policy",
             seed: Some(seed_api_tokens),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "scim_tokens",
             pattern: RlsPattern::P1Standard,
             rationale: "tenanted SCIM bearers; auth-path hash reads via zagrosi_auth policy",
             seed: Some(seed_scim_tokens),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "org_idps",
             pattern: RlsPattern::P1Standard,
             rationale: "per-org IdP configuration; SSO-discovery reads via zagrosi_auth policy",
             seed: Some(seed_org_idps),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "org_idp_domains",
@@ -85,18 +99,21 @@ pub fn rls_catalog() -> &'static [RlsCatalogEntry] {
             rationale: "per-org verified-domain claims (org_id denormalized in migration 023); \
                         SSO-discovery reads via zagrosi_auth policy",
             seed: Some(seed_org_idp_domains),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "groups",
             pattern: RlsPattern::P1Standard,
             rationale: "per-org SCIM groups",
             seed: Some(seed_groups),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "group_memberships",
             pattern: RlsPattern::P1Standard,
             rationale: "group join rows (org_id denormalized in migration 023)",
             seed: Some(seed_group_memberships),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "user_org_memberships",
@@ -104,30 +121,35 @@ pub fn rls_catalog() -> &'static [RlsCatalogEntry] {
             rationale: "org rows + SELECT-only self-arm (a user lists their own memberships \
                         across orgs before choosing one)",
             seed: Some(seed_user_org_memberships),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "failed_signin_aggregates",
             pattern: RlsPattern::P3NullableOrg,
             rationale: "org_id nullable by design: IP-only rows recorded pre-auth",
             seed: Some(seed_failed_signin_aggregates),
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "users",
             pattern: RlsPattern::P5Excluded,
             rationale: "user-scoped; sign-in-by-email lookups happen pre-tenant-context",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "orgs",
             pattern: RlsPattern::P5Excluded,
             rationale: "tenancy root; created pre-context during sign-up; PK/slug-addressed",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "sessions",
             pattern: RlsPattern::P5Excluded,
             rationale: "hash lookups pre-context (auth-role reads)",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "oidc_refresh_tokens",
@@ -135,42 +157,49 @@ pub fn rls_catalog() -> &'static [RlsCatalogEntry] {
             rationale: "hash-addressed rotation pre-context; no org column (plan deviation: \
                         drafted P1, but the table is session-keyed — sessions rationale)",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "email_outbox",
             pattern: RlsPattern::P5Excluded,
             rationale: "no org column; background-drained",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "password_resets",
             pattern: RlsPattern::P5Excluded,
             rationale: "user-scoped single-use token table",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "email_verifications",
             pattern: RlsPattern::P5Excluded,
             rationale: "user-scoped single-use token table",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "oidc_pending_auth",
             pattern: RlsPattern::P5Excluded,
             rationale: "pre-auth flow state",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "saml_pending_auth",
             pattern: RlsPattern::P5Excluded,
             rationale: "pre-auth flow state",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "saml_assertion_replay",
             pattern: RlsPattern::P5Excluded,
             rationale: "replay ledger written mid-authentication",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "federated_identities",
@@ -178,18 +207,61 @@ pub fn rls_catalog() -> &'static [RlsCatalogEntry] {
             rationale: "(protocol, issuer, subject) anchor lookup pre-context; org reachable \
                         only via org_idp_id join",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "service_tokens",
             pattern: RlsPattern::P5Excluded,
             rationale: "platform-internal principals",
             seed: None,
+            app_verbs: APP_FULL_DML,
         },
         RlsCatalogEntry {
             table: "_sqlx_migrations",
             pattern: RlsPattern::Infra,
             rationale: "migration bookkeeping; migrate-role only",
             seed: None,
+            app_verbs: &[],
+        },
+        // --- rbac set (section 06). Soft-delete-everywhere: zagrosi_app
+        //     holds no DELETE except custom_role_entries (hard-replaced
+        //     wholesale; no deleted_at column).
+        RlsCatalogEntry {
+            table: "resource_nodes",
+            pattern: RlsPattern::P1Standard,
+            rationale: "tenanted scope tree; org roots trigger-provisioned",
+            seed: Some(seed_resource_nodes),
+            app_verbs: APP_SOFT_DELETE,
+        },
+        RlsCatalogEntry {
+            table: "org_permission_versions",
+            pattern: RlsPattern::P1Standard,
+            rationale: "per-org cache-version counter keyed directly on org_id; rows \
+                        trigger-provisioned, app only reads/bumps",
+            seed: Some(seed_org_permission_versions),
+            app_verbs: &["SELECT", "UPDATE"],
+        },
+        RlsCatalogEntry {
+            table: "custom_roles",
+            pattern: RlsPattern::P1Standard,
+            rationale: "tenanted custom role definitions",
+            seed: Some(seed_custom_roles),
+            app_verbs: APP_SOFT_DELETE,
+        },
+        RlsCatalogEntry {
+            table: "custom_role_entries",
+            pattern: RlsPattern::P1Standard,
+            rationale: "capability entries (org_id denormalized, FK-pinned to the parent \
+                        role's org); hard-replaced wholesale, hence app DELETE",
+            seed: Some(seed_custom_role_entries),
+            app_verbs: &["SELECT", "INSERT", "DELETE"],
+        },
+        RlsCatalogEntry {
+            table: "role_assignments",
+            pattern: RlsPattern::P1Standard,
+            rationale: "tenanted user-to-role bindings on scope nodes",
+            seed: Some(seed_role_assignments),
+            app_verbs: APP_SOFT_DELETE,
         },
     ]
 }
@@ -368,6 +440,123 @@ fn seed_failed_signin_aggregates(
     })
 }
 
+/// The org's live root node id. Errors (`RowNotFound`) when invisible —
+/// which is exactly the fail-closed probe the no-GUC isolation test
+/// wants when a seeder runs over the app pool without tenant context.
+async fn org_root_node(pool: &PgPool, org: Uuid) -> Result<Uuid, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT id FROM resource_nodes
+         WHERE org_id = $1 AND scope_type = 'org' AND deleted_at IS NULL",
+    )
+    .bind(org)
+    .fetch_one(pool)
+    .await
+}
+
+fn seed_resource_nodes(
+    pool: &PgPool,
+    org: Uuid,
+) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let root = org_root_node(pool, org).await?;
+        sqlx::query(
+            "INSERT INTO resource_nodes (id, org_id, scope_type, parent_id)
+             VALUES ($1, $2, 'workspace', $3)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(org)
+        .bind(root)
+        .execute(pool)
+        .await?;
+        Ok(())
+    })
+}
+
+/// `org_permission_versions` is PK-per-org and trigger-provisioned, so
+/// the seeder cannot INSERT; it bumps the existing row instead. Zero
+/// rows affected (row invisible / absent) is reported as an error so
+/// the fail-closed no-GUC probe still observes a refusal.
+fn seed_org_permission_versions(
+    pool: &PgPool,
+    org: Uuid,
+) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let affected = sqlx::query(
+            "UPDATE org_permission_versions SET version = version + 1 WHERE org_id = $1",
+        )
+        .bind(org)
+        .execute(pool)
+        .await?
+        .rows_affected();
+        if affected == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+        Ok(())
+    })
+}
+
+fn seed_custom_roles(
+    pool: &PgPool,
+    org: Uuid,
+) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        insert_custom_role(pool, org).await?;
+        Ok(())
+    })
+}
+
+async fn insert_custom_role(pool: &PgPool, org: Uuid) -> Result<Uuid, sqlx::Error> {
+    let id = Uuid::now_v7();
+    sqlx::query("INSERT INTO custom_roles (id, org_id, name) VALUES ($1, $2, $3)")
+        .bind(id)
+        .bind(org)
+        .bind(format!("rls fixture {id}"))
+        .execute(pool)
+        .await?;
+    Ok(id)
+}
+
+fn seed_custom_role_entries(
+    pool: &PgPool,
+    org: Uuid,
+) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let role = insert_custom_role(pool, org).await?;
+        sqlx::query(
+            "INSERT INTO custom_role_entries (id, custom_role_id, org_id, capability, effect)
+             VALUES ($1, $2, $3, 'work_item.read', 'grant')",
+        )
+        .bind(Uuid::now_v7())
+        .bind(role)
+        .bind(org)
+        .execute(pool)
+        .await?;
+        Ok(())
+    })
+}
+
+fn seed_role_assignments(
+    pool: &PgPool,
+    org: Uuid,
+) -> Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let user = seed_fixture_user(pool).await?;
+        let root = org_root_node(pool, org).await?;
+        sqlx::query(
+            "INSERT INTO role_assignments
+                 (id, org_id, user_id, builtin_role, node_id, created_by)
+             VALUES ($1, $2, $3, 'member', $4, $3)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(org)
+        .bind(user)
+        .bind(root)
+        .execute(pool)
+        .await?;
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -398,6 +587,26 @@ mod tests {
                 "duplicate entry `{}`",
                 entry.table
             );
+        }
+    }
+
+    #[test]
+    fn app_verbs_are_well_formed() {
+        for entry in rls_catalog() {
+            for verb in entry.app_verbs {
+                assert!(
+                    APP_FULL_DML.contains(verb),
+                    "catalog entry `{}` lists unknown verb `{verb}`",
+                    entry.table
+                );
+            }
+            if matches!(entry.pattern, RlsPattern::Infra) {
+                assert!(
+                    entry.app_verbs.is_empty(),
+                    "infra entry `{}` must grant zagrosi_app nothing",
+                    entry.table
+                );
+            }
         }
     }
 }

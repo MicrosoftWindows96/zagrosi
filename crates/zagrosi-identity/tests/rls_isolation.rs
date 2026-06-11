@@ -31,6 +31,21 @@ fn tenanted() -> impl Iterator<Item = &'static RlsCatalogEntry> {
     })
 }
 
+/// Rows affected by a cross-tenant write probe. Verb-restricted tables
+/// (the rbac set withholds DELETE / UPDATE from `zagrosi_app` per the
+/// catalog's `app_verbs`) refuse with `42501 insufficient_privilege`
+/// BEFORE RLS row filtering — an even stronger isolation outcome, so it
+/// counts as zero rows touched. Any other error propagates.
+fn write_probe_rows_affected(
+    result: Result<sqlx::postgres::PgQueryResult, sqlx::Error>,
+) -> Result<u64, TestError> {
+    match result {
+        Ok(done) => Ok(done.rows_affected()),
+        Err(sqlx::Error::Database(db_err)) if db_err.code().as_deref() == Some("42501") => Ok(0),
+        Err(other) => Err(other.into()),
+    }
+}
+
 /// Seed `n` rows per table for one org via the migrate pool (BYPASSRLS).
 async fn seed_all(migrate: &PgPool, org: Uuid, n: u32) -> TestResult {
     for entry in tenanted() {
@@ -137,22 +152,28 @@ fn cross_tenant_writes_touch_zero_rows() {
 
                 for entry in tenanted() {
                     // Deliberately broad WHERE: every org-B row. Under org-A
-                    // context both UPDATE and DELETE must touch zero rows.
+                    // context both UPDATE and DELETE must touch zero rows
+                    // (verb-denied tables count as zero; see the helper).
+                    // A 42501 aborts the transaction, so each probe gets
+                    // its own.
                     let mut tx = begin_tenant_tx(db.app_pool(), org_a).await?;
-                    let updated = sqlx::query(&format!(
-                        "UPDATE {} SET org_id = org_id WHERE org_id = $1",
-                        entry.table
-                    ))
-                    .bind(org_b)
-                    .execute(tx.as_executor())
-                    .await?
-                    .rows_affected();
-                    let deleted =
+                    let updated = write_probe_rows_affected(
+                        sqlx::query(&format!(
+                            "UPDATE {} SET org_id = org_id WHERE org_id = $1",
+                            entry.table
+                        ))
+                        .bind(org_b)
+                        .execute(tx.as_executor())
+                        .await,
+                    )?;
+                    tx.rollback().await?;
+                    let mut tx = begin_tenant_tx(db.app_pool(), org_a).await?;
+                    let deleted = write_probe_rows_affected(
                         sqlx::query(&format!("DELETE FROM {} WHERE org_id = $1", entry.table))
                             .bind(org_b)
                             .execute(tx.as_executor())
-                            .await?
-                            .rows_affected();
+                            .await,
+                    )?;
                     tx.rollback().await?;
                     assert_eq!(updated, 0, "{}: cross-tenant UPDATE leaked", entry.table);
                     assert_eq!(deleted, 0, "{}: cross-tenant DELETE leaked", entry.table);

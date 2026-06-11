@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[package]
+name        = "zagrosi-rbac"
+version     = "0.1.0"
+description = "RBAC foundation crate for the Zagrosi platform: resource scope tree, custom roles, role assignments, and org permission versions on RLS-enforced Postgres."
+keywords    = ["zagrosi", "rbac", "authorization", "multitenancy"]
+categories  = ["authentication"]
+publish     = false
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+homepage.workspace     = true
+authors.workspace      = true
+readme.workspace       = true
+
+[lints]
+workspace = true
+
+[dependencies]
+zagrosi-db = { path = "../zagrosi-db" }
+sqlx       = { workspace = true }
+uuid       = { workspace = true }
+chrono     = { workspace = true }
+thiserror  = { workspace = true }
+
+[dev-dependencies]
+# Dev-dep loop (rbac -> test-support -> rbac) is cargo-legal but doubles
+# rbac's test builds; same trade-off as identity (see
+# crates/zagrosi-test-support/README.md).
+zagrosi-test-support = { path = "../zagrosi-test-support" }
+tokio                = { workspace = true }
+serial_test          = { workspace = true }
+static_assertions    = { workspace = true }

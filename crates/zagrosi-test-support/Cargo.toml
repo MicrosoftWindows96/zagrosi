@@ -17,6 +17,7 @@ workspace = true
 
 [dependencies]
 zagrosi-identity       = { path = "../zagrosi-identity" }
+zagrosi-rbac           = { path = "../zagrosi-rbac" }
 sqlx                   = { workspace = true }
 uuid                   = { workspace = true }
 tokio                  = { workspace = true }

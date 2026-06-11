@@ -27,6 +27,8 @@ pub mod rls_catalog;
 pub use error::HarnessError;
 pub use fixtures::{seed_org, seed_user};
 pub use harness::{DbRole, TestDb};
-pub use migrations::{MigrationSet, migration_sets, run_all_migrations};
+pub use migrations::{
+    MigrationSet, migration_sets, run_all_migrations, run_identity_migrations, run_rbac_migrations,
+};
 pub use minio::MinioHarness;
 pub use rls_catalog::{RlsCatalogEntry, RlsPattern, SeedFn, rls_catalog};

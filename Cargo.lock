@@ -6230,6 +6230,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "zagrosi-rbac"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serial_test",
+ "sqlx",
+ "static_assertions",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "zagrosi-db",
+ "zagrosi-test-support",
+]
+
+[[package]]
 name = "zagrosi-test-support"
 version = "0.1.0"
 dependencies = [
@@ -6241,6 +6256,7 @@ dependencies = [
  "tracing",
  "uuid",
  "zagrosi-identity",
+ "zagrosi-rbac",
 ]
 
 [[package]]

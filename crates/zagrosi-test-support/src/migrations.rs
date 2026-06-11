@@ -49,13 +49,19 @@ pub struct MigrationSet {
 }
 
 /// Ordered registry — dependency order identity -> rbac -> audit.
-/// Sections 06/11 append their entries here.
+/// Section 11 appends the audit entry here.
 #[must_use]
 pub fn migration_sets() -> &'static [MigrationSet] {
-    static SETS: &[MigrationSet] = &[MigrationSet {
-        name: "identity",
-        migrator: &zagrosi_identity::MIGRATOR,
-    }];
+    static SETS: &[MigrationSet] = &[
+        MigrationSet {
+            name: "identity",
+            migrator: &zagrosi_identity::MIGRATOR,
+        },
+        MigrationSet {
+            name: "rbac",
+            migrator: &zagrosi_rbac::MIGRATOR,
+        },
+    ];
     SETS
 }
 
@@ -72,20 +78,55 @@ pub fn migration_sets() -> &'static [MigrationSet] {
 pub async fn run_all_migrations(pool: &PgPool) -> Result<(), HarnessError> {
     assert_disjoint_versions()?;
     for set in migration_sets() {
-        // Local copy with ignore_missing: other sets' rows in the shared
-        // `_sqlx_migrations` table must not fail this set's validation.
-        // The fields are public-but-doc-hidden (semver-exempt); this is a
-        // non-published dev crate, and the alternative is hand-rolled
-        // bookkeeping.
-        let migrator = Migrator {
-            migrations: Cow::Borrowed(set.migrator.migrations.as_ref()),
-            ignore_missing: true,
-            locking: set.migrator.locking,
-            no_tx: set.migrator.no_tx,
-        };
-        migrator.run(pool).await?;
-        tracing::debug!(set = set.name, "migration set applied");
+        run_set(pool, set).await?;
     }
+    Ok(())
+}
+
+/// Apply the identity set alone. Staged-application tests (e.g. the
+/// rbac backfill suite) seed legacy data between this and
+/// [`run_rbac_migrations`].
+///
+/// # Errors
+///
+/// As [`run_all_migrations`], for this set only.
+pub async fn run_identity_migrations(pool: &PgPool) -> Result<(), HarnessError> {
+    run_named_set(pool, "identity").await
+}
+
+/// Apply the rbac set alone. The identity set MUST already be applied
+/// (the rbac migrations reference `orgs`, `users`, and the
+/// `zagrosi_enable_rls` generator).
+///
+/// # Errors
+///
+/// As [`run_all_migrations`], for this set only.
+pub async fn run_rbac_migrations(pool: &PgPool) -> Result<(), HarnessError> {
+    run_named_set(pool, "rbac").await
+}
+
+async fn run_named_set(pool: &PgPool, name: &'static str) -> Result<(), HarnessError> {
+    let set = migration_sets()
+        .iter()
+        .find(|set| set.name == name)
+        .ok_or_else(|| HarnessError::Config(format!("unknown migration set '{name}'")))?;
+    run_set(pool, set).await
+}
+
+async fn run_set(pool: &PgPool, set: &MigrationSet) -> Result<(), HarnessError> {
+    // Local copy with ignore_missing: other sets' rows in the shared
+    // `_sqlx_migrations` table must not fail this set's validation.
+    // The fields are public-but-doc-hidden (semver-exempt); this is a
+    // non-published dev crate, and the alternative is hand-rolled
+    // bookkeeping.
+    let migrator = Migrator {
+        migrations: Cow::Borrowed(set.migrator.migrations.as_ref()),
+        ignore_missing: true,
+        locking: set.migrator.locking,
+        no_tx: set.migrator.no_tx,
+    };
+    migrator.run(pool).await?;
+    tracing::debug!(set = set.name, "migration set applied");
     Ok(())
 }
 

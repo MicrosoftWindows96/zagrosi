@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE role_assignments\n        SET deleted_at = now()\n        WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "01d4d432479555980ad1a50781d2d765e38cdb4e755581bd0b21d452e3aafa48"
+}

@@ -27,27 +27,20 @@ async fn has_priv(
 #[serial]
 async fn app_role_grants_match_catalog() -> TestResult {
     let db = TestDb::new().await?;
-    // Every cataloged identity table (incl. P5) carries full DML for
-    // zagrosi_app — RLS does the row filtering, grants the verb
-    // filtering. (The verb-restricted audit_events table belongs to the
-    // audit migration set.)
+    // The catalog's `app_verbs` is the machine-readable grant matrix:
+    // identity tables carry full DML; rbac tables are verb-restricted
+    // (soft-delete-everywhere: no DELETE except hard-replaced entry
+    // sets); infra bookkeeping grants zagrosi_app nothing. Assert both
+    // directions so a stray grant fails as loudly as a missing one.
     for entry in rls_catalog() {
-        if entry.table.starts_with('_') {
-            // Infra bookkeeping: migrate-role only.
-            for privilege in ["SELECT", "INSERT", "UPDATE", "DELETE"] {
-                assert!(
-                    !has_priv(&db, "zagrosi_app", entry.table, privilege).await?,
-                    "zagrosi_app must NOT hold {privilege} on {}",
-                    entry.table
-                );
-            }
-            continue;
-        }
         for privilege in ["SELECT", "INSERT", "UPDATE", "DELETE"] {
-            assert!(
+            let want = entry.app_verbs.contains(&privilege);
+            assert_eq!(
                 has_priv(&db, "zagrosi_app", entry.table, privilege).await?,
-                "zagrosi_app missing {privilege} on {}",
-                entry.table
+                want,
+                "zagrosi_app {privilege} on {} must be {}",
+                entry.table,
+                if want { "granted" } else { "absent" }
             );
         }
     }

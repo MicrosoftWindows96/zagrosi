@@ -72,7 +72,20 @@ impl TestDb {
     /// Fails if docker is unavailable, the image cannot start, or any
     /// bootstrap/migration step fails.
     pub async fn new() -> Result<Self, HarnessError> {
-        Self::start(None).await
+        Self::start(None, true).await
+    }
+
+    /// Like [`TestDb::new`] but WITHOUT applying any migration set —
+    /// for staged-application tests (e.g. the rbac backfill suite,
+    /// which applies identity, seeds legacy rows, then applies rbac).
+    /// Callers drive `run_identity_migrations` / `run_rbac_migrations`
+    /// / [`run_all_migrations`] over [`TestDb::migrate_pool`] themselves.
+    ///
+    /// # Errors
+    ///
+    /// As [`TestDb::new`], minus migration failures.
+    pub async fn new_unmigrated() -> Result<Self, HarnessError> {
+        Self::start(None, false).await
     }
 
     /// Like [`TestDb::new`], plus a `MinIO` container on a shared docker
@@ -88,11 +101,14 @@ impl TestDb {
     pub async fn with_minio() -> Result<(Self, MinioHarness), HarnessError> {
         let network = format!("zg-ts-{}", Uuid::now_v7().simple());
         let minio = MinioHarness::start(&network).await?;
-        let db = Self::start(Some((&network, &minio))).await?;
+        let db = Self::start(Some((&network, &minio)), true).await?;
         Ok((db, minio))
     }
 
-    async fn start(minio: Option<(&str, &MinioHarness)>) -> Result<Self, HarnessError> {
+    async fn start(
+        minio: Option<(&str, &MinioHarness)>,
+        migrate: bool,
+    ) -> Result<Self, HarnessError> {
         let image_ref = image::pg_image();
         let (name, tag) = image::split_image_ref(&image_ref);
         let mut request = GenericImage::new(name, tag)
@@ -131,7 +147,9 @@ impl TestDb {
         bootstrap::install_extensions(&bootstrap_pool).await?;
 
         let migrate_pool = connect(&dsn_for(&host, port, DbRole::Migrate)).await?;
-        run_all_migrations(&migrate_pool).await?;
+        if migrate {
+            run_all_migrations(&migrate_pool).await?;
+        }
 
         let app_pool = connect(&dsn_for(&host, port, DbRole::App)).await?;
         let auth_pool = connect(&dsn_for(&host, port, DbRole::Auth)).await?;
